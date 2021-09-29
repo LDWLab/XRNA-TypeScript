@@ -1,5 +1,15 @@
 // import { ComplexScene2D } from "./xrnaDataStructures/ComplexScene2D"; 
-// import { Nuc2D } from "./xrnaDataStructures/Nuc2D";
+// import { Raphael } from "./raphael-2.3.0/raphael";
+
+enum BUTTON_INDEX {
+    LEFT = 1,
+    MIDDLE = 4,
+    RIGHT = 2,
+}
+
+interface FileHandler {
+    (inputFile : Blob) : void;
+}
 
 class Nucleotide {
     // The nucleotide symbol (A|C|G|T|U)
@@ -8,10 +18,12 @@ class Nucleotide {
     public y : number;
     public index : number
     public basePairIndex : number;
-    // [[x0, y0, x1, y1], [x, y, labelContent]]
-    public label : [[number, number, number, number], [number, number, string]]
+    // [x0, y0, x1, y1]
+    public labelLine : [number, number, number, number];
+    // [x, y, content, [r, g, b]]
+    public labelContent : [number, number, string, [number, number, number]];
     // [fontSize, fontFamily]
-    public font : [number, string]
+    public font : [number, string];
     // rgb color space
     public color : [number, number, number];
     // The html template for nucleotide data (specified in XML DtD)
@@ -19,21 +31,28 @@ class Nucleotide {
     // In case the index field is not provided, use the auto-incremented serialIndex
     private static serialIndex : number = 0;
 
-    public constructor(symbol : string, x : number = 0.0, y : number = 0.0, index : number = Nucleotide.serialIndex, basePairIndex = -1, label = <[[number, number, number, number], [number, number, string]]>null, font : [number, string] = [8, 'dialog'], color : [number, number, number] = [255, 255, 255]) {
+    public constructor(symbol : string, x : number = 0.0, y : number = 0.0, index : number = Nucleotide.serialIndex, basePairIndex = -1, labelLine = <[number, number, number, number]>null, labelContent = <[number, number, string, [number, number, number]]>null, font : [number, string] = [8, 'dialog'], color : [number, number, number] = [255, 255, 255]) {
         this.symbol = symbol;
         this.x = x;
         this.y = y;
         this.index = index;
         Nucleotide.serialIndex = index + 1;
         this.basePairIndex = basePairIndex;
-        this.label = label;
+        this.labelLine = labelLine;
+        if (labelLine) {
+            this.labelLine = [labelLine[1] + x, labelLine[1] + y, labelLine[2] + x, labelLine[3] + y];
+        }
+        this.labelContent = labelContent;
+        if (labelContent) {
+            this.labelContent = [labelContent[0] + x, labelContent[1] + y, labelContent[2], labelContent[3]];
+        }
         this.font = font;
         this.color = color;
     }
 
     public static parse(inputLine : string, template = Nucleotide.template) : Nucleotide {
         let inputData = inputLine.split(/\s+/);
-        let character : string;
+        let symbol : string;
         let x = 0.0;
         let y = 0.0;
         let index = Nucleotide.serialIndex
@@ -43,7 +62,7 @@ class Nucleotide {
                 x = parseFloat(inputData[1]);
                 y = parseFloat(inputData[2]);
             case "NucChar":
-                character = inputData[0];
+                symbol = inputData[0];
                 break;
             case "NucID.NucChar.XPos.YPos.FormatType.BPID":
                 basePairIndex = parseInt(inputData[5]);
@@ -52,18 +71,61 @@ class Nucleotide {
                 y = parseFloat(inputData[3]);
             case "NucID.NucChar":
                 index = parseInt(inputData[0]);
-                character = inputData[1];
+                symbol = inputData[1];
                 break;
             default:
                 throw new Error("Unrecognized Nuc2D format");
         }
-        return new Nucleotide(character, x, y, index, basePairIndex, null);
+        return new Nucleotide(symbol, x, y, index, basePairIndex);
     }
 }
 
 export class XRNA {
     // Allow for multiple RNA molecules, each containing nucleotides.
+    // [Nucleotide[], firstNucleotideIndex][]
     private static rnaMolecules : Array<[Array<Nucleotide>, number]>;
+
+    private static canvas : HTMLElement;
+
+    // Controls the scene scale exponentially.
+    private static sceneTickScale = 0;
+
+    private static sceneOriginX = 0;
+
+    private static sceneOriginY = 0;
+
+    private static cacheCanvasOriginX = 0;
+    
+    private static cacheCanvasOriginY = 0;
+
+    private static onDragX = 0;
+
+    private static onDragY = 0;
+
+    private static onDragFlag = false;
+
+    private static buttonIndex = BUTTON_INDEX.LEFT;
+
+    private static canvasInnerHTML = '';
+
+    private static selectedNucleotideIDs = new Set<string>();
+
+    static inputParserDictionary : Record<string, FileHandler> = {
+        'xml' : XRNA.parseXML,
+        'xrna' : XRNA.parseXRNA,
+        'ss' : XRNA.parseXML,
+        'ps' : XRNA.parseXML,
+        'svg' : XRNA.parseSVG,
+        'str' : XRNA.parseSTR
+    };
+
+    static outputWriterDictionary : Record<string, FileHandler> = {
+        'svg' : XRNA.writeSVG,
+        'csv' : XRNA.writeCSV,
+        'xrna' : XRNA.writeXRNA,
+        'bpseq' : XRNA.writeBPSeq,
+        'tr' : XRNA.writeTR
+    }
 
     public static mainWithArgumentParsing(args : string[]) : void {
         // Parse the command-line arguments
@@ -71,6 +133,7 @@ export class XRNA {
     }
 
     public static main(inputUrl? : string, outputUrls? : string[], printVersionFlag = false) : void {
+        XRNA.canvas = document.getElementById('canvas');
         if (printVersionFlag) {
             console.log("XRNA-GT-TypeScript 9/20/21");
         }
@@ -78,15 +141,122 @@ export class XRNA {
             XRNA.handleInputUrl(inputUrl);
 
             if (outputUrls) {
-                outputUrls.forEach(outputUrl => {
-                    XRNA.handleOutputUrl(outputUrl);
-                });
+                outputUrls.forEach(outputUrl => XRNA.handleOutputUrl(outputUrl));
             }
+        }
+        XRNA.reset();
+        // window.addEventListener('resize', _event => XRNA.renderScene(), true);
+        XRNA.canvas.addEventListener('wheel', function(event) {
+            XRNA.sceneTickScale += Math.sign(-event.deltaY);
+            XRNA.renderScene();
+        });
+        XRNA.canvas.addEventListener('mouseup', event => XRNA.handleButtonRelease(event));
+        XRNA.canvas.addEventListener('mousemove', event => XRNA.handleMouseMove(event));
+        XRNA.canvas.addEventListener('mousedown', event => XRNA.handleButtonPress(event));
+        XRNA.canvas.addEventListener('contextmenu', event => event.preventDefault());
+
+        // Collect the allowable input file extensions.
+        document.getElementById('input').setAttribute('accept', (Object.keys(XRNA.inputParserDictionary) as Array<string>).map(extension => "." + extension).join(', '));
+        // Collect the allowable output file extensions.
+        document.getElementById('output').setAttribute('accept', (Object.keys(XRNA.outputWriterDictionary) as Array<string>).map(extension => "." + extension).join(', '));
+    }
+
+    private static handleMouseMove(event) : void {
+        switch (XRNA.buttonIndex) {
+            case BUTTON_INDEX.LEFT:
+                break;
+            case BUTTON_INDEX.MIDDLE:
+                break;
+            case BUTTON_INDEX.RIGHT:
+                if (XRNA.onDragFlag) {
+                    let
+                        displacementX = event.pageX - XRNA.onDragX,
+                        displacementY = event.pageY - XRNA.onDragY;
+                    if (XRNA.selectedNucleotideIDs.size == 0) {
+                        XRNA.sceneOriginX = XRNA.cacheCanvasOriginX + displacementX;
+                        XRNA.sceneOriginY = XRNA.cacheCanvasOriginY + displacementY;
+                    }
+                    XRNA.renderScene();
+                }
+                break;
         }
     }
 
-    private static reset() : void {
-        XRNA.rnaMolecules = new Array<[Array<Nucleotide>, number]>();
+    private static handleButtonPress(event) : void {
+        XRNA.buttonIndex = XRNA.getButtonIndex(event);
+        switch (XRNA.buttonIndex) {
+            case BUTTON_INDEX.LEFT:
+                // let
+                //     idsOfElementsWithBoundingBoxesContainingMouse = XRNA.idsOfElementsWithBoundingBoxesContainingMouse(event.pageX, event.pageY);
+                    
+                break;
+            case BUTTON_INDEX.MIDDLE:
+                break;
+            case BUTTON_INDEX.RIGHT:
+                XRNA.onDragX = event.pageX;
+                XRNA.onDragY = event.pageY;
+                XRNA.onDragFlag = true;
+                break;
+        } 
+    }
+
+    private static handleButtonRelease(event) : void {
+        switch (XRNA.buttonIndex) {
+            case BUTTON_INDEX.LEFT:
+                XRNA.onDragFlag = false;
+                break;
+            case BUTTON_INDEX.MIDDLE:
+                break;
+            case BUTTON_INDEX.RIGHT:
+                XRNA.onDragFlag = false;
+                if (XRNA.selectedNucleotideIDs.size == 0) {
+                    XRNA.cacheCanvasOriginY = XRNA.sceneOriginY;
+                    XRNA.cacheCanvasOriginX = XRNA.sceneOriginX;
+                } else {
+                    XRNA.selectedNucleotideIDs.forEach(selectedNucleotideID => {
+                        let
+                            idStrings = selectedNucleotideID.match(/\d+/g),
+                            nucleotide = XRNA.rnaMolecules[parseInt(idStrings[0])][0][parseInt(idStrings[1])];
+                        nucleotide.x += event.pageX - XRNA.onDragX;
+                        nucleotide.y += event.pageY - XRNA.onDragY;
+                    });
+                    XRNA.prepareScene();
+                    XRNA.renderScene();
+                }
+                break;
+        }
+    }
+
+    private static getButtonIndex(event): BUTTON_INDEX {
+        let index = -1;
+        if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+            index = -1;
+        } else if ('buttons' in event) {
+            index = event.buttons;
+        } else if ('which' in event) {
+            index = event.which ;
+        } else {
+            index = event.button;
+        }
+        if (index in BUTTON_INDEX) {
+            return <BUTTON_INDEX>index;
+        }
+        throw new Error("Unrecognized button index: " + index);
+    }
+
+    private static reset(resetRNAMoleculesFlag = true, resetSceneFlag = true) : void {
+        if (resetRNAMoleculesFlag) {
+            XRNA.rnaMolecules = new Array<[Array<Nucleotide>, number]>();
+        }
+        XRNA.sceneOriginX = 0;
+        XRNA.sceneOriginY = 0;
+        XRNA.cacheCanvasOriginX = 0;
+        XRNA.cacheCanvasOriginY = 0;
+        XRNA.sceneTickScale = 0;
+        XRNA.onDragFlag = false;
+        if (resetSceneFlag) {
+            XRNA.renderScene();
+        }
     }
 
     public static handleInputUrl(inputUrl : string) : void {
@@ -96,8 +266,10 @@ export class XRNA {
     }
 
     public static handleInputFile(inputFile : Blob, fileExtension : string) : void {
-        XRNA.reset();
-        inputParserDictionary[fileExtension](inputFile);
+        XRNA.reset(false, false);
+        let inputParser = XRNA.inputParserDictionary[fileExtension];
+        inputParser(inputFile);
+
     }
 
     public static handleOutputUrl(outputUrl : string) : void {
@@ -107,7 +279,8 @@ export class XRNA {
     }
 
     public static handleOutputFile(outputFile : Blob, fileExtension : string) : void {
-        outputWriterDictionary[fileExtension](outputFile);
+        let outputWriter = XRNA.outputWriterDictionary[fileExtension];
+        outputWriter(outputFile);
     }
 
     public static openUrl(fileUrl : string) : Blob {
@@ -122,72 +295,208 @@ export class XRNA {
         return blob;
     }
 
-    private static tabCount = 0;
+    private static refIDs : [number, number][];
 
     public static parseXMLHelper(root : Document | Element) {
         for (let index = 0; index < root.children.length; index++) {
             let subElement : Element;
             subElement = root.children[index];
-            // console.log('\t'.repeat(XRNA.tabCount) + subElement.tagName);
             switch (subElement.tagName) {
-                case "ComplexDocument":
+                case "ComplexDocument": {
                     break;
-                case "Complex":
+                } 
+                case "Complex": {
                     break;
-                case "WithComplex":
+                }
+                case "WithComplex": {
                     break;
-                case "RNAMolecule":
+                }
+                case "RNAMolecule": {
                     break;
-                case "Nuc":
+                }
+                case "Nuc": {
+                    XRNA.refIDs = new Array<[number, number]>();
+                    let refIDsString = subElement.getAttribute('RefID') ?? subElement.getAttribute('RefIDs');
+                    if (!refIDsString) {
+                        throw new Error('Within the input file, a <Nuc> element is missing its RefID(s) attribute.');
+                    }
+                    refIDsString = refIDsString.replace(/\s+/, '');
+                    // comma-separated list of (potentially ordered-paired, potentially negative) integers.
+                    if (!refIDsString.match(/^(?:(?:-?\d+-)?-?\d+)(?:,(?:-?\d+-)?-?\d+)*$/)) {
+                        throw new Error('Within the input file, a <Nuc> element\'s refID(s) attribute is improperly formatted. It should be a comma-separated list of integers, or ordered integer pairs separated by \'-\'.');
+                    }
+                    let firstNucleotideIndex = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1][1];
+                    let refIDs = refIDsString.split(',').forEach(splitElement => {
+                        let matchedGroups = splitElement.match(/^(-?\d+)-(-?\d+)$/);
+                        if (matchedGroups) {
+                            XRNA.refIDs.push([parseInt(matchedGroups[1]) - firstNucleotideIndex, parseInt(matchedGroups[2]) - firstNucleotideIndex]);
+                        } else {
+                            let refID = parseInt(splitElement) - firstNucleotideIndex;
+                            XRNA.refIDs.push([refID, refID]);
+                        }
+                    });
                     break;
-                case "NucChars":
+                }
+                case "NucChars": {
                     break;
-                case "NucSegment":
+                }
+                case "NucSegment": {
                     break;
-                case "NucListData":
-                    let innerHtml = subElement.innerHTML;
-                    innerHtml = innerHtml.replace(/^\n/, '');
-                    innerHtml = innerHtml.replace(/\n$/, '');
-                    let innerHtmlLines = innerHtml.split('\n');
+                }
+                case "NucListData": {
+                    let innerHTML = subElement.innerHTML;
+                    innerHTML = innerHTML.replace(/^\n/, '');
+                    innerHTML = innerHTML.replace(/\n$/, '');
+                    let innerHTMLLines = innerHTML.split('\n');
                     Nucleotide.template = subElement.getAttribute('DataType');
-                    let startingNucleotideIndex = subElement.getAttribute('');
+                    let startingNucleotideIndexString = subElement.getAttribute('StartNucID');
+                    if (!startingNucleotideIndexString) {
+                        console.error("Within the input file, a <NucListData> element is missing its StartNucID attribute.");
+                        // We cannot continue without a starting nucleotide index.
+                        // Continuing to attempt to parse the current RNAMolecule will introduce errors.
+                        throw new Error("Missing StartNucID attribute prevents RNAMolecule parsing.");
+                    }
+                    let startingNucleotideIndex = parseInt(startingNucleotideIndexString);
                     let currentNucleotides = new Array<Nucleotide>();
-                    for (let index = 0; index < innerHtmlLines.length; index++) {
-                        let line = innerHtmlLines[index];
+                    for (let index = 0; index < innerHTMLLines.length; index++) {
+                        let line = innerHTMLLines[index];
                         if (!line.match(/^\s*$/)) {
                             currentNucleotides.push(Nucleotide.parse(line.trim()));
                         }
                     }
-                    XRNA.rnaMolecules.push([currentNucleotides, 0]);
+                    XRNA.rnaMolecules.push([currentNucleotides, startingNucleotideIndex]);
                     break;
-                case "LabelList":
+                }
+                case "LabelList": {
+                    let innerHTML = subElement.innerHTML;
+                    innerHTML = innerHTML.replace(/^\n/, '');
+                    innerHTML = innerHTML.replace(/\n$/, '');
+                    let innerHTMLLines = innerHTML.split('\n');
+                    let labelContent : [number, number, string, [number, number, number]] = null;
+                    let labelLine : [number, number, number, number] = null;
+                    innerHTMLLines.forEach(innerHTMLLine => {
+                        let splitLineElements = innerHTMLLine.split(/\s+/);
+                        switch (splitLineElements[0].toLowerCase()[0]) {
+                            case 'l':
+                                labelLine = [parseFloat(splitLineElements[1]), parseFloat(splitLineElements[2]), parseFloat(splitLineElements[3]),parseFloat(splitLineElements[4])];
+                                break;
+                            case 's':
+                                // Directly from XRNA source code (ComplexXMLParser.java):
+                                // x y ang size font color
+                                // Hardcode white for now.
+                                let rgb = 0xFFFFFF;//parseInt(splitLineElements[splitLineElements.length - 2]);
+                                labelContent = [parseFloat(splitLineElements[1]), parseFloat(splitLineElements[2]), splitLineElements[splitLineElements.length - 1].replace(/\"/g, ''), [(rgb >> 4) & 0xFF, (rgb >> 2) & 0xFF, rgb & 0xFF]];
+                                break;
+                        }
+                    });
+                    let nucleotides = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1][0];
+                    XRNA.refIDs.forEach(refIDPair => {
+                        for (let i = refIDPair[0]; i <= refIDPair[1]; i++) {
+                            nucleotides[i].labelContent = labelContent;
+                            nucleotides[i].labelLine = labelLine;
+                        }
+                    });
                     break;
-                case "NucSymbol":
+                }
+                case "NucSymbol": {
                     break;
-                case "Label":
+                }
+                case "Label": {
                     break;
-                case "StringLabel":
+                }
+                case "StringLabel": {
                     break;
-                case "CircleLabel":
+                }
+                case "CircleLabel": {
                     break;
-                case "TriangleLabel":
+                }
+                case "TriangleLabel": {
                     break;
-                case "ParallelogramLabel":
+                }
+                case "ParallelogramLabel": {
                     break;
-                case "LineLabel":
+                }
+                case "LineLabel": {
                     break;
-                case "RNAFile":
+                }
+                case "RNAFile": {
                     break;
-                case "BasePairs":
+                }
+                case "BasePairs": {
+                    let indexString = subElement.getAttribute("nucID");
+                    let lengthString = subElement.getAttribute("length");
+                    let basePairedIndexString = subElement.getAttribute("bpNucID");
+                    if (!indexString) {
+                        console.error("Within the input file a <BasePairs> element is missing its nucID attribute.");
+                        // We cannot continue without an index.
+                        break;
+                    }
+                    let index = parseInt(indexString);
+                    if (isNaN(index)) {
+                        console.error("Within the input file a <BasePairs> element is defined incorrectly; nucID = \"" + indexString + "\" is not an integer.");
+                        // We cannot continue without an index.
+                        break;
+                    }
+                    let length : number;
+                    if (!lengthString) {
+                        length = 1;
+                    } else {
+                        length = parseInt(lengthString);
+                        if (isNaN(length)) {
+                            console.error("Within the input file a <BasePairs> element is defined incorrectly; length = \"" + lengthString + "\" is not an integer.");
+                            // We cannot continue without a length.
+                            break;
+                        }
+                    }
+                    if (!basePairedIndexString) {
+                        console.error("Within the input file a <BasePairs> element is missing its bpNucID attribute.");
+                        // We cannot continue without a base-paired index.
+                        break;
+                    }
+                    let basePairedIndex = parseInt(basePairedIndexString);
+                    if (isNaN(basePairedIndex)) {
+                        console.error("Within the input file a <BasePairs> element is defined incorrectly; bpNucID = \"" + basePairedIndexString + "\" is not an integer.");
+                        // We cannot continue without a base-paired index.
+                        break;
+                    }
+                    // Peek the most recently created rna molecule.
+                    let currentRNAMolecule = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1];
+                    let firstNucleotideIndex = currentRNAMolecule[1];
+                    index -= firstNucleotideIndex;
+                    basePairedIndex -= firstNucleotideIndex;
+                    // Pair nucleotides.
+                    for (let innerIndex = 0; innerIndex < length; innerIndex++) {
+                        let nucleotideIndex0 = index + innerIndex;
+                        let nucleotideIndex1 = basePairedIndex - innerIndex;
+                        if (nucleotideIndex0 < 0) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex0 + " < 0");
+                            continue;
+                        }
+                        if (nucleotideIndex0 >= currentRNAMolecule[0].length) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex0 + " >= " + currentRNAMolecule[0].length);
+                            continue;
+                        }
+                        if (nucleotideIndex1 < 0) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex1 + " < 0");
+                            continue;
+                        }
+                        if (nucleotideIndex1 >= currentRNAMolecule[0].length) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex1 + " >= " + currentRNAMolecule[0].length);
+                            continue;
+                        }
+                        currentRNAMolecule[0][nucleotideIndex0].basePairIndex = nucleotideIndex1;
+                        currentRNAMolecule[0][nucleotideIndex1].basePairIndex = nucleotideIndex0;
+                    }
                     break;
-                case "BasePair":
+                }
+                case "BasePair": {
                     break;
-                case "SceneNodeGeom":
+                }
+                case "SceneNodeGeom": {
                     break;
+                }
             }
-            XRNA.tabCount++;
             XRNA.parseXMLHelper(subElement);
-            XRNA.tabCount--;
         }
     }
 
@@ -273,10 +582,10 @@ export class XRNA {
             }
             let parsed = new DOMParser().parseFromString(xmlContent, "text/xml");
             XRNA.parseXMLHelper(parsed);
+            XRNA.prepareScene();
             XRNA.renderScene();
         });
         reader.readAsText(inputFile, "UTF-8");
-        
     }
 
     public static parseSVG(inputFile : Blob) : void {
@@ -307,105 +616,83 @@ export class XRNA {
 
     }
 
-    public static renderScene() : void {
-        let svgCanvas = <any>document.getElementById('svgCanvas');
-        let innerHTML = '';
-        
-        let minX = Number.MAX_VALUE;
-        let minY = Number.MAX_VALUE;
-        let maxX = -Number.MAX_VALUE;
-        let maxY = -Number.MAX_VALUE;
-        XRNA.rnaMolecules.forEach(rnaMolecule => {
-            rnaMolecule.forEach(nucleotide => {
-                if (nucleotide.x < minX) {
-                    minX = nucleotide.x;
-                } else if (nucleotide.x > maxX) {
-                    maxX = nucleotide.x;
-                }
+    private static toggleNucleotide(id : string) : void {
+        // Toggle the presenece of id in XRNA.selectedNucleotideIDs
+        if (!XRNA.selectedNucleotideIDs.delete(id)) {
+            XRNA.selectedNucleotideIDs.add(id);
+        }
+        XRNA.prepareScene();
+        XRNA.renderScene();
+    }
 
-                // Make room for text elements drawn at the top of the svg canvas.
-                if (nucleotide.y - nucleotide.font[0] < minY) {
-                    minY = nucleotide.y - nucleotide.font[0];
-                } else if (nucleotide.y > maxY) {
-                    maxY = nucleotide.y;
+    public static prepareScene() : void {
+        let
+            rnaMoleculesNucleotidesInnerHTMLs = new Array<string>(),
+            rnaMoleculesLabelLinesInnerHTMLs = new Array<string>(),
+            rnaMoleculesLabelContentsInnerHTMLs = new Array<string>();
+
+        for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+            let rnaMolecule = XRNA.rnaMolecules[rnaMoleculeIndex];
+            let nucleotides = rnaMolecule[0];
+            let nucleotideFirstIndex = rnaMolecule[1];
+            for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
+                let nucleotide = nucleotides[nucleotideIndex];
+                let nucleotideID = XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex);
+                let nucleotideColor = XRNA.selectedNucleotideIDs.has(nucleotideID) ? [255, 0, 0] : nucleotide.color;
+                rnaMoleculesNucleotidesInnerHTMLs.push('<text id=\'' + nucleotideID + '\' x=\'' + nucleotide.x + '\' y=\'' + nucleotide.y + '\' font-size=\'' + nucleotide.font[0] + '\' font-family=\'' + nucleotide.font[1] + '\' stroke=\'rgb(' + nucleotideColor[0] + ' ' + nucleotideColor[1] + ' ' + nucleotideColor[2] + ')\' onclick=\'XRNA.toggleNucleotide(this.id);\'>' + nucleotide.symbol + '</text>');
+                let nucleotideLabelContent = nucleotide.labelContent;
+                if (nucleotideLabelContent) {
+                    let nucleotideLabelContentColor = nucleotideLabelContent[3];
+                    rnaMoleculesLabelContentsInnerHTMLs.push('<text id=\'' + XRNA.labelContentID(rnaMoleculeIndex, nucleotideIndex) + '\' x=\'' + (nucleotideLabelContent[0] + nucleotide.x) + '\' y=\'' + (nucleotideLabelContent[1] + nucleotide.y) + '\' font-size=\'' + nucleotide.font[0] + '\' font-family=\'' + nucleotide.font[1] + '\' stroke=\'rgb(' + nucleotideLabelContentColor[0] + ' ' + nucleotideLabelContentColor[1] + ' ' + nucleotideLabelContentColor[2] + ')\'>' + nucleotideLabelContent[2] + '</text>');
                 }
-            });
-        });
-        let canvasBoundingRectangle = svgCanvas.getBoundingClientRect()
-        let scalar = Math.min(canvasBoundingRectangle.width / (maxX - minX), canvasBoundingRectangle.height / (maxY - minY));
-        // NOTE: transformations are applied RIGHT-TO-LEFT!
-        // Place elements' apparent origin at (0, 0).
-        let transformText = "translate(" + -minX + " " + -minY + ")";
-        // Correct for scale.
-        transformText = "scale(" + scalar + " " + scalar +  ") " + transformText;
-        // Correct the inverted y axis.
-        transformText = "scale(" + 1 + " " + -1 +  ") " + transformText;
-        // 
-        innerHTML += "<g id = 'Rendering Correction' transform = '" + transformText + ">";
-        innerHTML += "<g id = 'Nucleotides'>";
-        let rnaMoleculeCounter = 0;
-        XRNA.rnaMolecules.forEach(rnaMolecule => {
-            innerHTML += "<g id = 'RNA Molecule #'" + rnaMoleculeCounter + "'>";
-            rnaMolecule.forEach(nucleotide => {
-                let nucleotideColor = nucleotide.color;
-                let nucleotideFont = nucleotide.font;
-                // Add the nucleotide <text> element to the <svg> canvas.
-                innerHTML += "<text x='" + nucleotide.x + "' y='" + nucleotide.y + "' fill='rgb(" + nucleotideColor[0] + ", " + nucleotideColor[1] +  ", " + nucleotideColor[2] + ")' font-size='" + nucleotideFont[0] + "' font-family='" + nucleotideFont[1] + "'>" + nucleotide.symbol + "</text>";
-                // If it exists, add the nucleotide's base pair <line> element to the <svg> canvas.
-                if (nucleotide.basePairIndex != -1 && nucleotide.index > nucleotide.basePairIndex) {
-                    let otherNucleotide = <Nucleotide>;
-                    let x1 = nucleotide.x;
-                    let x2 = otherNucleotide.x;
-                    let y1 = nucleotide.y;
-                    let y2 = otherNucleotide.y;
-                    innerHTML += "<line x1 = '" + x1 + " y1 = '" + y1 + "' x2 = '" + x2 + "' y2 = '" + y2 + "'/>";
+                let nucleotideLabelLine = nucleotide.labelLine;
+                if (nucleotideLabelLine) {
+                    rnaMoleculesLabelLinesInnerHTMLs.push('<line x1=\'' + (nucleotideLabelLine[0] + nucleotide.x) + '\' y1=\'' + (nucleotideLabelLine[1] + nucleotide.y) + '\' x2=\'' + (nucleotideLabelLine[2] + nucleotide.x) +'\' y2=\'' + (nucleotideLabelLine[3] + nucleotide.y) + '\' stroke=\'white\'></line>');
                 }
-            });
-            innerHTML += "</g>"
-            rnaMoleculeCounter++;
-        });
-        innerHTML += "</g>"
-        svgCanvas.innerHTML = innerHTML;
+            }
+        }
+        XRNA.canvasInnerHTML = rnaMoleculesNucleotidesInnerHTMLs.join('') + rnaMoleculesLabelContentsInnerHTMLs.join('') + rnaMoleculesLabelLinesInnerHTMLs.join('');
+    }
+
+    // public static idsOfElementsWithBoundingBoxesContainingMouse(x : number, y : number) : Array<string> {
+    //     let boundingBoxesContainingMouse = new Array<string>();
+    //     for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+
+    //         for (let ) {
+
+    //         }
+    //     }
+    //     return boundingBoxesContainingMouse;
+    // }
+
+    public static renderScene() : void {
+        XRNA.canvas.innerHTML = XRNA.canvasInnerHTML;
+        let rnaMoleculesBondLinesInnerHTMLs = new Array<string>();
+
+        for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+            let nucleotides = XRNA.rnaMolecules[rnaMoleculeIndex][0];
+            for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
+                let nucleotide = nucleotides[nucleotideIndex];
+                if (nucleotide.index < nucleotide.basePairIndex && nucleotide.basePairIndex >= 0 && nucleotide.basePairIndex < nucleotides.length) {
+                    let
+                        boundingBox0 = (<any>document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex))).getBBox(),
+                        boundingBox1 = (<any>document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotide.basePairIndex))).getBBox();
+                    rnaMoleculesBondLinesInnerHTMLs.push('<line x1=\'' + (boundingBox0.x + boundingBox0.width / 2.0) + '\' y1=\'' + (boundingBox0.y + boundingBox0.height / 2.0) + '\' x2=\'' + (boundingBox1.x + boundingBox1.width / 2.0) + '\' y2=\'' + (boundingBox1.y + boundingBox1.height / 2.0) + '\' stroke=\'white\'/>');
+                }
+            }
+        }
+        XRNA.canvas.innerHTML += rnaMoleculesBondLinesInnerHTMLs.join('');
+    }
+
+    public static rnaMoleculeID(rnaMoleculeIndex : number) : string {
+        return 'RNA Molecule #' + rnaMoleculeIndex;
+    }
+
+    public static nucleotideID(rnaMoleculeIndex : number, nucleotideIndex : number) : string {
+        return XRNA.rnaMoleculeID(rnaMoleculeIndex) + ' - Nucleotide #' + nucleotideIndex;
+    }
+
+    public static labelContentID(rnaMoleculeIndex : number, nucleotideIndex : number) : string {
+        return XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex) + ' - Label Content';
     }
 }
-
-interface FileHandler {
-    (inputFile : Blob) : void;
-}
-
-interface Renderable {
-    // Renderable objects generate svg strings.
-    () : string;
-}
-
-let inputParserDictionary : Record<string, FileHandler>;
-inputParserDictionary = {
-    'xml' : XRNA.parseXML,
-    'xrna' : XRNA.parseXRNA,
-    'ss' : XRNA.parseXML,
-    'ps' : XRNA.parseXML,
-    'svg' : XRNA.parseSVG,
-    'str' : XRNA.parseSTR
-};
-
-let outputWriterDictionary : Record<string, FileHandler>;
-outputWriterDictionary = {
-    'svg' : XRNA.writeSVG,
-    'csv' : XRNA.writeCSV,
-    'xrna' : XRNA.writeXRNA,
-    'bpseq' : XRNA.writeBPSeq,
-    'tr' : XRNA.writeTR
-}
-
-var acceptableInputFileExtensions = Object.keys(inputParserDictionary) as Array<string>;
-var acceptableOutputFileExtensions = Object.keys(outputWriterDictionary) as Array<string>;
-for (let index = 0; index < acceptableInputFileExtensions.length; index++) {
-    acceptableInputFileExtensions[index] = "." + acceptableInputFileExtensions[index];
-}
-for (let index = 0; index < acceptableOutputFileExtensions.length; index++) {
-    acceptableOutputFileExtensions[index] = "." + acceptableOutputFileExtensions[index];
-}
-document.getElementById('input').setAttribute('accept', acceptableInputFileExtensions.join(', '));
-document.getElementById('output').setAttribute('accept', acceptableOutputFileExtensions.join(', '));
-
-XRNA.main(null, [], false);

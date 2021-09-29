@@ -1,15 +1,22 @@
 "use strict";
 // import { ComplexScene2D } from "./xrnaDataStructures/ComplexScene2D"; 
-// import { Nuc2D } from "./xrnaDataStructures/Nuc2D";
+// import { Raphael } from "./raphael-2.3.0/raphael";
 exports.__esModule = true;
 exports.XRNA = void 0;
+var BUTTON_INDEX;
+(function (BUTTON_INDEX) {
+    BUTTON_INDEX[BUTTON_INDEX["LEFT"] = 1] = "LEFT";
+    BUTTON_INDEX[BUTTON_INDEX["MIDDLE"] = 4] = "MIDDLE";
+    BUTTON_INDEX[BUTTON_INDEX["RIGHT"] = 2] = "RIGHT";
+})(BUTTON_INDEX || (BUTTON_INDEX = {}));
 var Nucleotide = /** @class */ (function () {
-    function Nucleotide(symbol, x, y, index, basePairIndex, label, font, color) {
+    function Nucleotide(symbol, x, y, index, basePairIndex, labelLine, labelContent, font, color) {
         if (x === void 0) { x = 0.0; }
         if (y === void 0) { y = 0.0; }
         if (index === void 0) { index = Nucleotide.serialIndex; }
         if (basePairIndex === void 0) { basePairIndex = -1; }
-        if (label === void 0) { label = null; }
+        if (labelLine === void 0) { labelLine = null; }
+        if (labelContent === void 0) { labelContent = null; }
         if (font === void 0) { font = [8, 'dialog']; }
         if (color === void 0) { color = [255, 255, 255]; }
         this.symbol = symbol;
@@ -18,14 +25,21 @@ var Nucleotide = /** @class */ (function () {
         this.index = index;
         Nucleotide.serialIndex = index + 1;
         this.basePairIndex = basePairIndex;
-        this.label = label;
+        this.labelLine = labelLine;
+        if (labelLine) {
+            this.labelLine = [labelLine[1] + x, labelLine[1] + y, labelLine[2] + x, labelLine[3] + y];
+        }
+        this.labelContent = labelContent;
+        if (labelContent) {
+            this.labelContent = [labelContent[0] + x, labelContent[1] + y, labelContent[2], labelContent[3]];
+        }
         this.font = font;
         this.color = color;
     }
     Nucleotide.parse = function (inputLine, template) {
         if (template === void 0) { template = Nucleotide.template; }
         var inputData = inputLine.split(/\s+/);
-        var character;
+        var symbol;
         var x = 0.0;
         var y = 0.0;
         var index = Nucleotide.serialIndex;
@@ -35,7 +49,7 @@ var Nucleotide = /** @class */ (function () {
                 x = parseFloat(inputData[1]);
                 y = parseFloat(inputData[2]);
             case "NucChar":
-                character = inputData[0];
+                symbol = inputData[0];
                 break;
             case "NucID.NucChar.XPos.YPos.FormatType.BPID":
                 basePairIndex = parseInt(inputData[5]);
@@ -44,12 +58,12 @@ var Nucleotide = /** @class */ (function () {
                 y = parseFloat(inputData[3]);
             case "NucID.NucChar":
                 index = parseInt(inputData[0]);
-                character = inputData[1];
+                symbol = inputData[1];
                 break;
             default:
                 throw new Error("Unrecognized Nuc2D format");
         }
-        return new Nucleotide(character, x, y, index, basePairIndex, null);
+        return new Nucleotide(symbol, x, y, index, basePairIndex);
     };
     // In case the index field is not provided, use the auto-incremented serialIndex
     Nucleotide.serialIndex = 0;
@@ -64,20 +78,124 @@ var XRNA = /** @class */ (function () {
     };
     XRNA.main = function (inputUrl, outputUrls, printVersionFlag) {
         if (printVersionFlag === void 0) { printVersionFlag = false; }
+        XRNA.canvas = document.getElementById('canvas');
         if (printVersionFlag) {
             console.log("XRNA-GT-TypeScript 9/20/21");
         }
         if (inputUrl) {
             XRNA.handleInputUrl(inputUrl);
             if (outputUrls) {
-                outputUrls.forEach(function (outputUrl) {
-                    XRNA.handleOutputUrl(outputUrl);
-                });
+                outputUrls.forEach(function (outputUrl) { return XRNA.handleOutputUrl(outputUrl); });
             }
         }
+        XRNA.reset();
+        // window.addEventListener('resize', _event => XRNA.renderScene(), true);
+        XRNA.canvas.addEventListener('wheel', function (event) {
+            XRNA.sceneTickScale += Math.sign(-event.deltaY);
+            XRNA.renderScene();
+        });
+        XRNA.canvas.addEventListener('mouseup', function (event) { return XRNA.handleButtonRelease(event); });
+        XRNA.canvas.addEventListener('mousemove', function (event) { return XRNA.handleMouseMove(event); });
+        XRNA.canvas.addEventListener('mousedown', function (event) { return XRNA.handleButtonPress(event); });
+        XRNA.canvas.addEventListener('contextmenu', function (event) { return event.preventDefault(); });
+        // Collect the allowable input file extensions.
+        document.getElementById('input').setAttribute('accept', Object.keys(XRNA.inputParserDictionary).map(function (extension) { return "." + extension; }).join(', '));
+        // Collect the allowable output file extensions.
+        document.getElementById('output').setAttribute('accept', Object.keys(XRNA.outputWriterDictionary).map(function (extension) { return "." + extension; }).join(', '));
     };
-    XRNA.reset = function () {
-        XRNA.nucleotides = new Array();
+    XRNA.handleMouseMove = function (event) {
+        switch (XRNA.buttonIndex) {
+            case BUTTON_INDEX.LEFT:
+                break;
+            case BUTTON_INDEX.MIDDLE:
+                break;
+            case BUTTON_INDEX.RIGHT:
+                if (XRNA.onDragFlag) {
+                    var displacementX = event.pageX - XRNA.onDragX, displacementY = event.pageY - XRNA.onDragY;
+                    if (XRNA.selectedNucleotideIDs.size == 0) {
+                        XRNA.sceneOriginX = XRNA.cacheCanvasOriginX + displacementX;
+                        XRNA.sceneOriginY = XRNA.cacheCanvasOriginY + displacementY;
+                    }
+                    XRNA.renderScene();
+                }
+                break;
+        }
+    };
+    XRNA.handleButtonPress = function (event) {
+        XRNA.buttonIndex = XRNA.getButtonIndex(event);
+        switch (XRNA.buttonIndex) {
+            case BUTTON_INDEX.LEFT:
+                // let
+                //     idsOfElementsWithBoundingBoxesContainingMouse = XRNA.idsOfElementsWithBoundingBoxesContainingMouse(event.pageX, event.pageY);
+                break;
+            case BUTTON_INDEX.MIDDLE:
+                break;
+            case BUTTON_INDEX.RIGHT:
+                XRNA.onDragX = event.pageX;
+                XRNA.onDragY = event.pageY;
+                XRNA.onDragFlag = true;
+                break;
+        }
+    };
+    XRNA.handleButtonRelease = function (event) {
+        switch (XRNA.buttonIndex) {
+            case BUTTON_INDEX.LEFT:
+                XRNA.onDragFlag = false;
+                break;
+            case BUTTON_INDEX.MIDDLE:
+                break;
+            case BUTTON_INDEX.RIGHT:
+                XRNA.onDragFlag = false;
+                if (XRNA.selectedNucleotideIDs.size == 0) {
+                    XRNA.cacheCanvasOriginY = XRNA.sceneOriginY;
+                    XRNA.cacheCanvasOriginX = XRNA.sceneOriginX;
+                }
+                else {
+                    XRNA.selectedNucleotideIDs.forEach(function (selectedNucleotideID) {
+                        var idStrings = selectedNucleotideID.match(/\d+/g), nucleotide = XRNA.rnaMolecules[parseInt(idStrings[0])][0][parseInt(idStrings[1])];
+                        nucleotide.x += event.pageX - XRNA.onDragX;
+                        nucleotide.y += event.pageY - XRNA.onDragY;
+                    });
+                    XRNA.prepareScene();
+                    XRNA.renderScene();
+                }
+                break;
+        }
+    };
+    XRNA.getButtonIndex = function (event) {
+        var index = -1;
+        if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+            index = -1;
+        }
+        else if ('buttons' in event) {
+            index = event.buttons;
+        }
+        else if ('which' in event) {
+            index = event.which;
+        }
+        else {
+            index = event.button;
+        }
+        if (index in BUTTON_INDEX) {
+            return index;
+        }
+        throw new Error("Unrecognized button index: " + index);
+    };
+    XRNA.reset = function (resetRNAMoleculesFlag, resetSceneFlag) {
+        if (resetRNAMoleculesFlag === void 0) { resetRNAMoleculesFlag = true; }
+        if (resetSceneFlag === void 0) { resetSceneFlag = true; }
+        if (resetRNAMoleculesFlag) {
+            XRNA.rnaMolecules = new Array();
+        }
+        XRNA.sceneOriginX = 0;
+        XRNA.sceneOriginY = 0;
+        XRNA.cacheCanvasOriginX = 0;
+        XRNA.cacheCanvasOriginY = 0;
+        XRNA.sceneTickScale = 0;
+        XRNA.onDragFlag = false;
+        if (resetSceneFlag) {
+            XRNA.renderScene();
+        }
     };
     XRNA.handleInputUrl = function (inputUrl) {
         inputUrl = inputUrl.trim().toLowerCase();
@@ -85,8 +203,9 @@ var XRNA = /** @class */ (function () {
         XRNA.handleInputFile(XRNA.openUrl(inputUrl), fileExtension);
     };
     XRNA.handleInputFile = function (inputFile, fileExtension) {
-        XRNA.reset();
-        inputParserDictionary[fileExtension](inputFile);
+        XRNA.reset(false, false);
+        var inputParser = XRNA.inputParserDictionary[fileExtension];
+        inputParser(inputFile);
     };
     XRNA.handleOutputUrl = function (outputUrl) {
         outputUrl = outputUrl.trim().toLowerCase();
@@ -94,7 +213,8 @@ var XRNA = /** @class */ (function () {
         XRNA.handleOutputFile(XRNA.openUrl(outputUrl), fileExtension);
     };
     XRNA.handleOutputFile = function (outputFile, fileExtension) {
-        outputWriterDictionary[fileExtension](outputFile);
+        var outputWriter = XRNA.outputWriterDictionary[fileExtension];
+        outputWriter(outputFile);
     };
     XRNA.openUrl = function (fileUrl) {
         var request = new XMLHttpRequest();
@@ -108,68 +228,211 @@ var XRNA = /** @class */ (function () {
         return blob;
     };
     XRNA.parseXMLHelper = function (root) {
-        for (var index = 0; index < root.children.length; index++) {
+        var _a;
+        var _loop_1 = function (index) {
             var subElement = void 0;
             subElement = root.children[index];
-            // console.log('\t'.repeat(XRNA.tabCount) + subElement.tagName);
             switch (subElement.tagName) {
-                case "ComplexDocument":
+                case "ComplexDocument": {
                     break;
-                case "Complex":
+                }
+                case "Complex": {
                     break;
-                case "WithComplex":
+                }
+                case "WithComplex": {
                     break;
-                case "RNAMolecule":
+                }
+                case "RNAMolecule": {
                     break;
-                case "Nuc":
+                }
+                case "Nuc": {
+                    XRNA.refIDs = new Array();
+                    var refIDsString = (_a = subElement.getAttribute('RefID')) !== null && _a !== void 0 ? _a : subElement.getAttribute('RefIDs');
+                    if (!refIDsString) {
+                        throw new Error('Within the input file, a <Nuc> element is missing its RefID(s) attribute.');
+                    }
+                    refIDsString = refIDsString.replace(/\s+/, '');
+                    // comma-separated list of (potentially ordered-paired, potentially negative) integers.
+                    if (!refIDsString.match(/^(?:(?:-?\d+-)?-?\d+)(?:,(?:-?\d+-)?-?\d+)*$/)) {
+                        throw new Error('Within the input file, a <Nuc> element\'s refID(s) attribute is improperly formatted. It should be a comma-separated list of integers, or ordered integer pairs separated by \'-\'.');
+                    }
+                    var firstNucleotideIndex_1 = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1][1];
+                    var refIDs = refIDsString.split(',').forEach(function (splitElement) {
+                        var matchedGroups = splitElement.match(/^(-?\d+)-(-?\d+)$/);
+                        if (matchedGroups) {
+                            XRNA.refIDs.push([parseInt(matchedGroups[1]) - firstNucleotideIndex_1, parseInt(matchedGroups[2]) - firstNucleotideIndex_1]);
+                        }
+                        else {
+                            var refID = parseInt(splitElement) - firstNucleotideIndex_1;
+                            XRNA.refIDs.push([refID, refID]);
+                        }
+                    });
                     break;
-                case "NucChars":
+                }
+                case "NucChars": {
                     break;
-                case "NucSegment":
+                }
+                case "NucSegment": {
                     break;
-                case "NucListData":
-                    var innerHtml = subElement.innerHTML;
-                    innerHtml = innerHtml.replace(/^\n/, '');
-                    innerHtml = innerHtml.replace(/\n$/, '');
-                    var innerHtmlLines = innerHtml.split('\n');
+                }
+                case "NucListData": {
+                    var innerHTML = subElement.innerHTML;
+                    innerHTML = innerHTML.replace(/^\n/, '');
+                    innerHTML = innerHTML.replace(/\n$/, '');
+                    var innerHTMLLines = innerHTML.split('\n');
                     Nucleotide.template = subElement.getAttribute('DataType');
-                    var currentRNAMolecule = new Array();
-                    for (var index_1 = 0; index_1 < innerHtmlLines.length; index_1++) {
-                        var line = innerHtmlLines[index_1];
+                    var startingNucleotideIndexString = subElement.getAttribute('StartNucID');
+                    if (!startingNucleotideIndexString) {
+                        console.error("Within the input file, a <NucListData> element is missing its StartNucID attribute.");
+                        // We cannot continue without a starting nucleotide index.
+                        // Continuing to attempt to parse the current RNAMolecule will introduce errors.
+                        throw new Error("Missing StartNucID attribute prevents RNAMolecule parsing.");
+                    }
+                    var startingNucleotideIndex = parseInt(startingNucleotideIndexString);
+                    var currentNucleotides = new Array();
+                    for (var index_1 = 0; index_1 < innerHTMLLines.length; index_1++) {
+                        var line = innerHTMLLines[index_1];
                         if (!line.match(/^\s*$/)) {
-                            currentRNAMolecule.push(Nucleotide.parse(line.trim()));
+                            currentNucleotides.push(Nucleotide.parse(line.trim()));
                         }
                     }
-                    XRNA.nucleotides.push(currentRNAMolecule);
+                    XRNA.rnaMolecules.push([currentNucleotides, startingNucleotideIndex]);
                     break;
-                case "LabelList":
+                }
+                case "LabelList": {
+                    var innerHTML = subElement.innerHTML;
+                    innerHTML = innerHTML.replace(/^\n/, '');
+                    innerHTML = innerHTML.replace(/\n$/, '');
+                    var innerHTMLLines = innerHTML.split('\n');
+                    var labelContent_1 = null;
+                    var labelLine_1 = null;
+                    innerHTMLLines.forEach(function (innerHTMLLine) {
+                        var splitLineElements = innerHTMLLine.split(/\s+/);
+                        switch (splitLineElements[0].toLowerCase()[0]) {
+                            case 'l':
+                                labelLine_1 = [parseFloat(splitLineElements[1]), parseFloat(splitLineElements[2]), parseFloat(splitLineElements[3]), parseFloat(splitLineElements[4])];
+                                break;
+                            case 's':
+                                // Directly from XRNA source code (ComplexXMLParser.java):
+                                // x y ang size font color
+                                // Hardcode white for now.
+                                var rgb = 0xFFFFFF; //parseInt(splitLineElements[splitLineElements.length - 2]);
+                                labelContent_1 = [parseFloat(splitLineElements[1]), parseFloat(splitLineElements[2]), splitLineElements[splitLineElements.length - 1].replace(/\"/g, ''), [(rgb >> 4) & 0xFF, (rgb >> 2) & 0xFF, rgb & 0xFF]];
+                                break;
+                        }
+                    });
+                    var nucleotides_1 = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1][0];
+                    XRNA.refIDs.forEach(function (refIDPair) {
+                        for (var i = refIDPair[0]; i <= refIDPair[1]; i++) {
+                            nucleotides_1[i].labelContent = labelContent_1;
+                            nucleotides_1[i].labelLine = labelLine_1;
+                        }
+                    });
                     break;
-                case "NucSymbol":
+                }
+                case "NucSymbol": {
                     break;
-                case "Label":
+                }
+                case "Label": {
                     break;
-                case "StringLabel":
+                }
+                case "StringLabel": {
                     break;
-                case "CircleLabel":
+                }
+                case "CircleLabel": {
                     break;
-                case "TriangleLabel":
+                }
+                case "TriangleLabel": {
                     break;
-                case "ParallelogramLabel":
+                }
+                case "ParallelogramLabel": {
                     break;
-                case "LineLabel":
+                }
+                case "LineLabel": {
                     break;
-                case "RNAFile":
+                }
+                case "RNAFile": {
                     break;
-                case "BasePairs":
+                }
+                case "BasePairs": {
+                    var indexString = subElement.getAttribute("nucID");
+                    var lengthString = subElement.getAttribute("length");
+                    var basePairedIndexString = subElement.getAttribute("bpNucID");
+                    if (!indexString) {
+                        console.error("Within the input file a <BasePairs> element is missing its nucID attribute.");
+                        // We cannot continue without an index.
+                        break;
+                    }
+                    var index_2 = parseInt(indexString);
+                    if (isNaN(index_2)) {
+                        console.error("Within the input file a <BasePairs> element is defined incorrectly; nucID = \"" + indexString + "\" is not an integer.");
+                        // We cannot continue without an index.
+                        break;
+                    }
+                    var length_1 = void 0;
+                    if (!lengthString) {
+                        length_1 = 1;
+                    }
+                    else {
+                        length_1 = parseInt(lengthString);
+                        if (isNaN(length_1)) {
+                            console.error("Within the input file a <BasePairs> element is defined incorrectly; length = \"" + lengthString + "\" is not an integer.");
+                            // We cannot continue without a length.
+                            break;
+                        }
+                    }
+                    if (!basePairedIndexString) {
+                        console.error("Within the input file a <BasePairs> element is missing its bpNucID attribute.");
+                        // We cannot continue without a base-paired index.
+                        break;
+                    }
+                    var basePairedIndex = parseInt(basePairedIndexString);
+                    if (isNaN(basePairedIndex)) {
+                        console.error("Within the input file a <BasePairs> element is defined incorrectly; bpNucID = \"" + basePairedIndexString + "\" is not an integer.");
+                        // We cannot continue without a base-paired index.
+                        break;
+                    }
+                    // Peek the most recently created rna molecule.
+                    var currentRNAMolecule = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1];
+                    var firstNucleotideIndex = currentRNAMolecule[1];
+                    index_2 -= firstNucleotideIndex;
+                    basePairedIndex -= firstNucleotideIndex;
+                    // Pair nucleotides.
+                    for (var innerIndex = 0; innerIndex < length_1; innerIndex++) {
+                        var nucleotideIndex0 = index_2 + innerIndex;
+                        var nucleotideIndex1 = basePairedIndex - innerIndex;
+                        if (nucleotideIndex0 < 0) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index_2 + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length_1 + "'>): " + nucleotideIndex0 + " < 0");
+                            continue;
+                        }
+                        if (nucleotideIndex0 >= currentRNAMolecule[0].length) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index_2 + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length_1 + "'>): " + nucleotideIndex0 + " >= " + currentRNAMolecule[0].length);
+                            continue;
+                        }
+                        if (nucleotideIndex1 < 0) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index_2 + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length_1 + "'>): " + nucleotideIndex1 + " < 0");
+                            continue;
+                        }
+                        if (nucleotideIndex1 >= currentRNAMolecule[0].length) {
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index_2 + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length_1 + "'>): " + nucleotideIndex1 + " >= " + currentRNAMolecule[0].length);
+                            continue;
+                        }
+                        currentRNAMolecule[0][nucleotideIndex0].basePairIndex = nucleotideIndex1;
+                        currentRNAMolecule[0][nucleotideIndex1].basePairIndex = nucleotideIndex0;
+                    }
                     break;
-                case "BasePair":
+                }
+                case "BasePair": {
                     break;
-                case "SceneNodeGeom":
+                }
+                case "SceneNodeGeom": {
                     break;
+                }
             }
-            XRNA.tabCount++;
             XRNA.parseXMLHelper(subElement);
-            XRNA.tabCount--;
+        };
+        for (var index = 0; index < root.children.length; index++) {
+            _loop_1(index);
         }
     };
     XRNA.parseXML = function (inputFile) {
@@ -253,6 +516,7 @@ var XRNA = /** @class */ (function () {
             }
             var parsed = new DOMParser().parseFromString(xmlContent, "text/xml");
             XRNA.parseXMLHelper(parsed);
+            XRNA.prepareScene();
             XRNA.renderScene();
         });
         reader.readAsText(inputFile, "UTF-8");
@@ -271,86 +535,97 @@ var XRNA = /** @class */ (function () {
     };
     XRNA.writeTR = function (outputFile) {
     };
-    XRNA.renderScene = function () {
-        var svgCanvas = document.getElementById('svgCanvas');
-        var innerHTML = '';
-        XRNA.nucleotides.forEach(function (rnaMolecule) {
-            var minX = Number.MAX_VALUE;
-            var minY = Number.MAX_VALUE;
-            var maxX = -Number.MAX_VALUE;
-            var maxY = -Number.MAX_VALUE;
-            var nucleotideWithMinimumY = null;
-            rnaMolecule.forEach(function (nucleotide) {
-                if (nucleotide.x < minX) {
-                    minX = nucleotide.x;
-                }
-                else if (nucleotide.x > maxX) {
-                    maxX = nucleotide.x;
-                }
-                if (nucleotide.y < minY) {
-                    minY = nucleotide.y;
-                    nucleotideWithMinimumY = nucleotide;
-                }
-                else if (nucleotide.y > maxY) {
-                    maxY = nucleotide.y;
-                }
-            });
-            var canvasBoundingRectangle = svgCanvas.getBoundingClientRect();
-            var scalar = Math.min(canvasBoundingRectangle.width / (maxX - minX), canvasBoundingRectangle.height / (maxY - minY));
-            rnaMolecule.forEach(function (nucleotide) {
-                // correct for off-screen elements.
-                var x = nucleotide.x - minX;
-                var y = nucleotide.y - minY;
-                // correct for scale.
-                x *= scalar;
-                y *= scalar;
-                // correct for inverted y axis.
-                y = canvasBoundingRectangle.height - y;
-                var nucleotideColor = nucleotide.color;
-                // Add the nucleotide <text> element to the <svg> canvas.
-                innerHTML += "<text x='" + x + "' y='" + y + "' fill='rgb(" + nucleotideColor[0] + ", " + nucleotideColor[1] + ", " + nucleotideColor[2] + ")' font-size='8'>" + nucleotide.symbol + "</text>";
-                // If it exists, add the nucleotide's base pair <line> element to the <svg> canvas.
-                if (nucleotide.basePairIndex != -1 && nucleotide.index > nucleotide.basePairIndex) {
-                    var otherNucleotide = null;
-                    var x1 = x;
-                    var x2 = 0;
-                    var y1 = y;
-                    var y2 = 0;
-                    innerHTML += "<line x1='" + x1 + " y1='" + y1 + "' x2='" + x2 + "' y2='" + y2 + "' />";
-                }
-            });
-        });
-        svgCanvas.innerHTML = innerHTML;
+    XRNA.toggleNucleotide = function (id) {
+        // Toggle the presenece of id in XRNA.selectedNucleotideIDs
+        if (!XRNA.selectedNucleotideIDs["delete"](id)) {
+            XRNA.selectedNucleotideIDs.add(id);
+        }
+        XRNA.prepareScene();
+        XRNA.renderScene();
     };
-    XRNA.tabCount = 0;
+    XRNA.prepareScene = function () {
+        var rnaMoleculesNucleotidesInnerHTMLs = new Array(), rnaMoleculesLabelLinesInnerHTMLs = new Array(), rnaMoleculesLabelContentsInnerHTMLs = new Array();
+        for (var rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+            var rnaMolecule = XRNA.rnaMolecules[rnaMoleculeIndex];
+            var nucleotides = rnaMolecule[0];
+            var nucleotideFirstIndex = rnaMolecule[1];
+            for (var nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
+                var nucleotide = nucleotides[nucleotideIndex];
+                var nucleotideID = XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex);
+                var nucleotideColor = XRNA.selectedNucleotideIDs.has(nucleotideID) ? [255, 0, 0] : nucleotide.color;
+                rnaMoleculesNucleotidesInnerHTMLs.push('<text id=\'' + nucleotideID + '\' x=\'' + nucleotide.x + '\' y=\'' + nucleotide.y + '\' font-size=\'' + nucleotide.font[0] + '\' font-family=\'' + nucleotide.font[1] + '\' stroke=\'rgb(' + nucleotideColor[0] + ' ' + nucleotideColor[1] + ' ' + nucleotideColor[2] + ')\' onclick=\'XRNA.toggleNucleotide(this.id);\'>' + nucleotide.symbol + '</text>');
+                var nucleotideLabelContent = nucleotide.labelContent;
+                if (nucleotideLabelContent) {
+                    var nucleotideLabelContentColor = nucleotideLabelContent[3];
+                    rnaMoleculesLabelContentsInnerHTMLs.push('<text id=\'' + XRNA.labelContentID(rnaMoleculeIndex, nucleotideIndex) + '\' x=\'' + (nucleotideLabelContent[0] + nucleotide.x) + '\' y=\'' + (nucleotideLabelContent[1] + nucleotide.y) + '\' font-size=\'' + nucleotide.font[0] + '\' font-family=\'' + nucleotide.font[1] + '\' stroke=\'rgb(' + nucleotideLabelContentColor[0] + ' ' + nucleotideLabelContentColor[1] + ' ' + nucleotideLabelContentColor[2] + ')\'>' + nucleotideLabelContent[2] + '</text>');
+                }
+                var nucleotideLabelLine = nucleotide.labelLine;
+                if (nucleotideLabelLine) {
+                    rnaMoleculesLabelLinesInnerHTMLs.push('<line x1=\'' + (nucleotideLabelLine[0] + nucleotide.x) + '\' y1=\'' + (nucleotideLabelLine[1] + nucleotide.y) + '\' x2=\'' + (nucleotideLabelLine[2] + nucleotide.x) + '\' y2=\'' + (nucleotideLabelLine[3] + nucleotide.y) + '\' stroke=\'white\'></line>');
+                }
+            }
+        }
+        XRNA.canvasInnerHTML = rnaMoleculesNucleotidesInnerHTMLs.join('') + rnaMoleculesLabelContentsInnerHTMLs.join('') + rnaMoleculesLabelLinesInnerHTMLs.join('');
+    };
+    // public static idsOfElementsWithBoundingBoxesContainingMouse(x : number, y : number) : Array<string> {
+    //     let boundingBoxesContainingMouse = new Array<string>();
+    //     for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+    //         for (let ) {
+    //         }
+    //     }
+    //     return boundingBoxesContainingMouse;
+    // }
+    XRNA.renderScene = function () {
+        XRNA.canvas.innerHTML = XRNA.canvasInnerHTML;
+        var rnaMoleculesBondLinesInnerHTMLs = new Array();
+        for (var rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+            var nucleotides = XRNA.rnaMolecules[rnaMoleculeIndex][0];
+            for (var nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
+                var nucleotide = nucleotides[nucleotideIndex];
+                if (nucleotide.index < nucleotide.basePairIndex && nucleotide.basePairIndex >= 0 && nucleotide.basePairIndex < nucleotides.length) {
+                    var boundingBox0 = document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex)).getBBox(), boundingBox1 = document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotide.basePairIndex)).getBBox();
+                    rnaMoleculesBondLinesInnerHTMLs.push('<line x1=\'' + (boundingBox0.x + boundingBox0.width / 2.0) + '\' y1=\'' + (boundingBox0.y + boundingBox0.height / 2.0) + '\' x2=\'' + (boundingBox1.x + boundingBox1.width / 2.0) + '\' y2=\'' + (boundingBox1.y + boundingBox1.height / 2.0) + '\' stroke=\'white\'/>');
+                }
+            }
+        }
+        XRNA.canvas.innerHTML += rnaMoleculesBondLinesInnerHTMLs.join('');
+    };
+    XRNA.rnaMoleculeID = function (rnaMoleculeIndex) {
+        return 'RNA Molecule #' + rnaMoleculeIndex;
+    };
+    XRNA.nucleotideID = function (rnaMoleculeIndex, nucleotideIndex) {
+        return XRNA.rnaMoleculeID(rnaMoleculeIndex) + ' - Nucleotide #' + nucleotideIndex;
+    };
+    XRNA.labelContentID = function (rnaMoleculeIndex, nucleotideIndex) {
+        return XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex) + ' - Label Content';
+    };
+    // Controls the scene scale exponentially.
+    XRNA.sceneTickScale = 0;
+    XRNA.sceneOriginX = 0;
+    XRNA.sceneOriginY = 0;
+    XRNA.cacheCanvasOriginX = 0;
+    XRNA.cacheCanvasOriginY = 0;
+    XRNA.onDragX = 0;
+    XRNA.onDragY = 0;
+    XRNA.onDragFlag = false;
+    XRNA.buttonIndex = BUTTON_INDEX.LEFT;
+    XRNA.canvasInnerHTML = '';
+    XRNA.selectedNucleotideIDs = new Set();
+    XRNA.inputParserDictionary = {
+        'xml': XRNA.parseXML,
+        'xrna': XRNA.parseXRNA,
+        'ss': XRNA.parseXML,
+        'ps': XRNA.parseXML,
+        'svg': XRNA.parseSVG,
+        'str': XRNA.parseSTR
+    };
+    XRNA.outputWriterDictionary = {
+        'svg': XRNA.writeSVG,
+        'csv': XRNA.writeCSV,
+        'xrna': XRNA.writeXRNA,
+        'bpseq': XRNA.writeBPSeq,
+        'tr': XRNA.writeTR
+    };
     return XRNA;
 }());
 exports.XRNA = XRNA;
-var inputParserDictionary;
-inputParserDictionary = {
-    'xml': XRNA.parseXML,
-    'xrna': XRNA.parseXRNA,
-    'ss': XRNA.parseXML,
-    'ps': XRNA.parseXML,
-    'svg': XRNA.parseSVG,
-    'str': XRNA.parseSTR
-};
-var outputWriterDictionary;
-outputWriterDictionary = {
-    'svg': XRNA.writeSVG,
-    'csv': XRNA.writeCSV,
-    'xrna': XRNA.writeXRNA,
-    'bpseq': XRNA.writeBPSeq,
-    'tr': XRNA.writeTR
-};
-var acceptableInputFileExtensions = Object.keys(inputParserDictionary);
-var acceptableOutputFileExtensions = Object.keys(outputWriterDictionary);
-for (var index = 0; index < acceptableInputFileExtensions.length; index++) {
-    acceptableInputFileExtensions[index] = "." + acceptableInputFileExtensions[index];
-}
-for (var index = 0; index < acceptableOutputFileExtensions.length; index++) {
-    acceptableOutputFileExtensions[index] = "." + acceptableOutputFileExtensions[index];
-}
-document.getElementById('input').setAttribute('accept', acceptableInputFileExtensions.join(', '));
-document.getElementById('output').setAttribute('accept', acceptableOutputFileExtensions.join(', '));
-XRNA.main(null, [], false);
