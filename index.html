@@ -31,12 +31,19 @@
             <button onclick='["IO Tab", "Edit Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Format Tab").style.display="block";'>Format</button>
             <div id='IO Tab'>
                 <label for="input">Choose an input file:</label>
-                <input type="file" id="input" onchange="XRNA.handleInputFile(this.files[0], this.value.split('.')[1]);">
+                <input type="file" id="input" onchange="
+                    let split = this.value.split('.');
+                    let path = split[0];
+                    document.getElementById('output file name').value = path.substring(path.lastIndexOf('\\') + 1);
+                    XRNA.handleInputFile(this.files[0], split[1]);">
+                </input>
                 <br>
-                <label for="output">Choose an output file:</label>
-                <input type="file" id="output", onchange="XRNA.handleOutputFile(this.files[0], this.value.split('.')[1]);">
+                <label for="output file name">Create an output file:</label>
+                <input type="text" id="output file name"></input>
+                <select id="output file extension"></select>
+                <button onclick="XRNA.handleOutputUrl(document.getElementById('output file name').value + document.getElementById('output file extension').value)">Download</button>
                 <br>
-                <button onclick="XRNA.resetView();">Reset</button>
+                <button onclick="XRNA.resetView();">Reset View</button>
             </div>
             <div id='Edit Tab' style="display : none;">
                 Place Editing Tools Here!

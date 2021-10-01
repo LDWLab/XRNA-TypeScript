@@ -14,7 +14,7 @@ interface FileParser {
 }
 
 interface FileWriter {
-    (outputFile : Blob) : void;
+    () : string;
 }
 
 class ParsingData {
@@ -111,6 +111,8 @@ export class XRNA {
     };
 
     private static outputWriterDictionary : Record<string, FileWriter> = {
+        'xrna' : XRNA.writeXRNA,
+        'svg' : XRNA.writeSVG
     };
 
     private static sceneBounds = {
@@ -124,6 +126,8 @@ export class XRNA {
 
     // buttonIndex is always equal to the current mouse buttons (see BUTTON_INDEX) depressed within the canvas.
     private static buttonIndex = BUTTON_INDEX.NONE;
+
+    private static previousOutputUrl : string;
 
     public static mainWithArgumentParsing(args = <string[]>[]) : void {
         // Parse the command-line arguments
@@ -144,10 +148,18 @@ export class XRNA {
             }
         }
 
-        // Collect the allowable input file extensions.
+        // Collect the supported input file extensions.
         document.getElementById('input').setAttribute('accept', (Object.keys(XRNA.inputParserDictionary) as Array<string>).map(extension => "." + extension).join(', '));
-        // Collect the allowable output file extensions.
-        document.getElementById('output').setAttribute('accept', (Object.keys(XRNA.outputWriterDictionary) as Array<string>).map(extension => "." + extension).join(', '));
+        // Collect the supported output file extensions.
+        let outputFileExtensionElement = document.getElementById('output file extension');
+        (Object.keys(XRNA.outputWriterDictionary) as Array<string>).forEach(extension => {
+            let option = document.createElement('option');
+            extension = '.' + extension;
+            option.value = extension;
+            option.innerHTML = extension;
+
+            outputFileExtensionElement.appendChild(option);
+        });
 
         XRNA.canvas.oncontextmenu = event => {
             event.preventDefault();
@@ -225,8 +237,8 @@ export class XRNA {
     }
 
     public static handleInputUrl(inputUrl : string) : void {
-        inputUrl = inputUrl.trim().toLowerCase();
-        let fileExtension = inputUrl.split('.')[1];
+        inputUrl = inputUrl.trim();
+        let fileExtension = inputUrl.split('.')[1].toLowerCase();
         XRNA.handleInputFile(XRNA.openUrl(inputUrl), fileExtension);
     }
 
@@ -253,14 +265,20 @@ export class XRNA {
     } 
 
     public static handleOutputUrl(outputUrl : string) : void {
-        outputUrl = outputUrl.trim().toLowerCase();
-        let fileExtension = outputUrl.split('.')[1];
-        XRNA.handleOutputFile(XRNA.openUrl(outputUrl), fileExtension);
-    }
-
-    public static handleOutputFile(outputFile : Blob, fileExtension : string) : void {
+        if (XRNA.previousOutputUrl) {
+            window.URL.revokeObjectURL(XRNA.previousOutputUrl);
+        }
+        XRNA.previousOutputUrl = outputUrl;
+        outputUrl = outputUrl.trim();
+        let fileExtension = outputUrl.split('.')[1].toLowerCase();
         let outputWriter = XRNA.outputWriterDictionary[fileExtension];
-        outputWriter(outputFile);
+        let url = window.URL.createObjectURL(new Blob([outputWriter()], {type: 'text/plain'}));
+        let downloader = document.createElement('a');
+        downloader.setAttribute('href', url);
+        downloader.download = outputUrl;
+        document.body.appendChild(downloader);
+        downloader.click();
+        document.body.removeChild(downloader);
     }
 
     public static openUrl(fileUrl : string) : Blob {
@@ -478,12 +496,6 @@ export class XRNA {
         }
     }
 
-    private static getBoundingBox(htmlElement : SVGTextElement | HTMLElement) : DOMRect {
-        let boundingBox = htmlElement.getBoundingClientRect();
-        boundingBox.y -= XRNA.canvasBounds.y;
-        return boundingBox;
-    }
-
     public static parseXML(fileAsText : string) : void {
         XRNA.parseXMLHelper(new DOMParser().parseFromString(fileAsText, 'text/xml'), null);
     }
@@ -537,6 +549,62 @@ export class XRNA {
         XRNA.parseXMLHelper(new DOMParser().parseFromString(inputFileAsText, "text/xml"), new ParsingData());
     }
 
+    public static writeXRNA() : string {
+        let xrnaFrontHalf = '';
+        let xrnaBackHalf = '';
+        let name = 'Unknown';
+        xrnaFrontHalf += '<ComplexDocument Name=\'' + name + '\'>\n';
+        xrnaBackHalf = '\n</ComplexDocument>' + xrnaBackHalf;
+        xrnaFrontHalf += '<SceneNodeGeom CenterX=\'' + 0 + '\' CenterY=\'' + 0 + '\' Scale=\'' + 1 + '\'/>\n';
+        xrnaFrontHalf += '<Complex Name=\'' + name + '\'>\n'
+        xrnaBackHalf = '\n</Complex>' + xrnaBackHalf
+        for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+            let rnaMolecule = XRNA.rnaMolecules[rnaMoleculeIndex];
+            let nucleotides = rnaMolecule[0];
+            let firstNucleotideIndex = rnaMolecule[1];
+            xrnaFrontHalf += '<RNAMolecule Name=\'' + name + '\'>\n';
+            xrnaBackHalf = '\n</RNAMolecule>' + xrnaBackHalf;
+            xrnaFrontHalf += '<NucListData StartNucID=\'' + firstNucleotideIndex + '\' DataType=\'NucChar.XPos.YPos\'>\n';
+            let nucLabelLists = '';
+            let basePairs = '';
+            for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
+                let nucleotide = nucleotides[nucleotideIndex];
+                xrnaFrontHalf += nucleotide.symbol + ' ' + nucleotide.x + ' ' + nucleotide.y + '\n';
+                
+                if (nucleotide.labelContent || nucleotide.labelContent) {
+                    nucLabelLists += '<Nuc RefID=\'' + (firstNucleotideIndex + nucleotideIndex) + '\'>\n<LabelList>\n';
+                    if (nucleotide.labelLine) {
+                        let line = nucleotide.labelLine;
+                        nucLabelLists += 'l ' + line[0] + ' ' + line[1] + ' ' + line[2] + ' ' + line[3] + ' ' + '0.2 0 0.0 0 0 0 0\n';
+                    }
+                    if (nucleotide.labelContent) {
+                        let content = nucleotide.labelContent;
+                        nucLabelLists += 's ' + content[0] + ' ' + content[1] + ' 0.0 ' + nucleotide.font[0] + ' 0 0 \"' + content[2] + '\"\n';
+                    }
+                    nucLabelLists += '</LabelList>\n</Nuc>\n';
+                }
+                if (nucleotide.basePairIndex >= 0 && nucleotideIndex < nucleotide.basePairIndex) {
+                    basePairs += '<BasePairs nucID=\'' + (firstNucleotideIndex + nucleotideIndex) + '\' length=\'1\' bpNucID=\'' + (firstNucleotideIndex + nucleotide.basePairIndex) + '\' />\n'
+                }
+            }
+            xrnaFrontHalf += '</NucListData>\n';
+            xrnaFrontHalf += '<Nuc RefIDs=\'' + firstNucleotideIndex + '-' + (firstNucleotideIndex + nucleotides.length - 1) + '\' IsSchematic=\'false\' SchematicColor=\'0\' SchematicLineWidth=\'1.5\' SchematicBPLineWidth=\'1.0\' SchematicBPGap=\'2.0\' SchematicFPGap=\'2.0\' SchematicTPGap=\'2.0\' IsNucPath=\'false\' NucPathColor=\'ff0000\' NucPathLineWidth=\'0.0\' />\n';
+            xrnaFrontHalf += nucLabelLists;
+            xrnaFrontHalf += basePairs;
+        }
+        return xrnaFrontHalf + xrnaBackHalf;
+    }
+
+    public static writeSVG() : string {
+        throw new Error('Not implemented yet.');
+    }
+
+    private static getBoundingBox(htmlElement : SVGTextElement | HTMLElement) : DOMRect {
+        let boundingBox = htmlElement.getBoundingClientRect();
+        boundingBox.y -= XRNA.canvasBounds.y;
+        return boundingBox;
+    }
+
     public static rnaMoleculeID(rnaMoleculeIndex : number) : string {
         return 'RNA Molecule #' + rnaMoleculeIndex;
     }
@@ -551,10 +619,10 @@ export class XRNA {
 
     public static fitSceneToBounds() : void {
         // Scale to fit the screen
-        let sceneScale = Math.min(this.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), this.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
+        let sceneScale = Math.min(XRNA.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), XRNA.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
         XRNA.sceneTransform.unshift('scale(' + sceneScale + ' ' + sceneScale + ')');
         // Center scene along the y axis.
-        XRNA.sceneTransform.unshift('translate(0 ' + this.canvasBounds.height + ')');
+        XRNA.sceneTransform.unshift('translate(0 ' + XRNA.canvasBounds.height + ')');
         document.getElementById('scene').setAttribute('transform', XRNA.sceneTransform.join(' '));
         // Remove the elements of XRNA.sceneTransform which were added by fitSceneToBounds().
         // This is necessary to ensure correct scene fitting when fitSceneToBounds() is called multiple times.
