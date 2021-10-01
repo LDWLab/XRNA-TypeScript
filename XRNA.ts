@@ -1,14 +1,24 @@
-// import { ComplexScene2D } from "./xrnaDataStructures/ComplexScene2D"; 
-// import { Raphael } from "./raphael-2.3.0/raphael";
-
 enum BUTTON_INDEX {
+    NONE = 0,
     LEFT = 1,
-    MIDDLE = 4,
     RIGHT = 2,
+    LEFT_RIGHT = 3,
+    MIDDLE = 4,
+    LEFT_MIDDLE = 5,
+    RIGHT_MIDDLE = 6,
+    LEFT_MIDDLE_RIGHT = 7
 }
 
-interface FileHandler {
-    (inputFile : Blob) : void;
+interface FileParser {
+    (inputFileAsText : string) : void;
+}
+
+interface FileWriter {
+    (outputFile : Blob) : void;
+}
+
+class ParsingData {
+    public refIDs = new Array<[number, number]>();
 }
 
 class Nucleotide {
@@ -16,7 +26,6 @@ class Nucleotide {
     public symbol : string;
     public x : number;
     public y : number;
-    public index : number
     public basePairIndex : number;
     // [x0, y0, x1, y1]
     public labelLine : [number, number, number, number];
@@ -28,15 +37,11 @@ class Nucleotide {
     public color : [number, number, number];
     // The html template for nucleotide data (specified in XML DtD)
     public static template : string;
-    // In case the index field is not provided, use the auto-incremented serialIndex
-    private static serialIndex : number = 0;
 
-    public constructor(symbol : string, x : number = 0.0, y : number = 0.0, index : number = Nucleotide.serialIndex, basePairIndex = -1, labelLine = <[number, number, number, number]>null, labelContent = <[number, number, string, [number, number, number]]>null, font : [number, string] = [8, 'dialog'], color : [number, number, number] = [255, 255, 255]) {
+    public constructor(symbol : string, x : number = 0.0, y : number = 0.0, basePairIndex = -1, labelLine = <[number, number, number, number]>null, labelContent = <[number, number, string, [number, number, number]]>null, font : [number, string] = [8, 'dialog'], color : [number, number, number] = [255, 255, 255]) {
         this.symbol = symbol;
         this.x = x;
         this.y = y;
-        this.index = index;
-        Nucleotide.serialIndex = index + 1;
         this.basePairIndex = basePairIndex;
         this.labelLine = labelLine;
         if (labelLine) {
@@ -55,7 +60,6 @@ class Nucleotide {
         let symbol : string;
         let x = 0.0;
         let y = 0.0;
-        let index = Nucleotide.serialIndex
         let basePairIndex = -1;
         switch (template) {
             case "NucChar.XPos.YPos":
@@ -70,13 +74,12 @@ class Nucleotide {
                 x = parseFloat(inputData[2]);
                 y = parseFloat(inputData[3]);
             case "NucID.NucChar":
-                index = parseInt(inputData[0]);
                 symbol = inputData[1];
                 break;
             default:
                 throw new Error("Unrecognized Nuc2D format");
         }
-        return new Nucleotide(symbol, x, y, index, basePairIndex);
+        return new Nucleotide(symbol, x, y, basePairIndex);
     }
 }
 
@@ -87,56 +90,52 @@ export class XRNA {
 
     private static canvas : HTMLElement;
 
-    // Controls the scene scale exponentially.
-    private static sceneTickScale = 0;
+    private static canvasBounds : DOMRect;
 
-    private static sceneOriginX = 0;
+    private static sceneDressingData = {
+        originX : 0,
+        originY : 0,
+        // zoom is on a linear scale. It is converted to exponential before use.
+        zoom : 0,
+        cacheOriginX : 0,
+        cacheOriginY : 0,
+        onDragX : 0,
+        onDragY : 0
+    };
 
-    private static sceneOriginY = 0;
-
-    private static cacheCanvasOriginX = 0;
-    
-    private static cacheCanvasOriginY = 0;
-
-    private static onDragX = 0;
-
-    private static onDragY = 0;
-
-    private static onDragFlag = false;
-
-    private static buttonIndex = BUTTON_INDEX.LEFT;
-
-    private static canvasInnerHTML = '';
-
-    private static selectedNucleotideIDs = new Set<string>();
-
-    static inputParserDictionary : Record<string, FileHandler> = {
+    private static inputParserDictionary : Record<string, FileParser> = {
         'xml' : XRNA.parseXML,
         'xrna' : XRNA.parseXRNA,
         'ss' : XRNA.parseXML,
-        'ps' : XRNA.parseXML,
-        'svg' : XRNA.parseSVG,
-        'str' : XRNA.parseSTR
+        'ps' : XRNA.parseXML
     };
 
-    static outputWriterDictionary : Record<string, FileHandler> = {
-        'svg' : XRNA.writeSVG,
-        'csv' : XRNA.writeCSV,
-        'xrna' : XRNA.writeXRNA,
-        'bpseq' : XRNA.writeBPSeq,
-        'tr' : XRNA.writeTR
-    }
+    private static outputWriterDictionary : Record<string, FileWriter> = {
+    };
 
-    public static mainWithArgumentParsing(args : string[]) : void {
+    private static sceneBounds = {
+        minimumX : null,
+        maximumX : null,
+        minimumY : null,
+        maximumY : null
+    };
+
+    private static sceneTransform : string[];
+
+    // buttonIndex is always equal to the current mouse buttons (see BUTTON_INDEX) depressed within the canvas.
+    private static buttonIndex = BUTTON_INDEX.NONE;
+
+    public static mainWithArgumentParsing(args = <string[]>[]) : void {
         // Parse the command-line arguments
         throw new Error("Argument parsing is not implemented.");
     }
 
-    public static main(inputUrl? : string, outputUrls? : string[], printVersionFlag = false) : void {
-        XRNA.canvas = document.getElementById('canvas');
+    public static main(inputUrl = <string>null, outputUrls = <string[]>null, printVersionFlag = false) : void {
         if (printVersionFlag) {
-            console.log("XRNA-GT-TypeScript 9/20/21");
+            console.log("XRNA-GT-TypeScript 9/30/21");
         }
+        XRNA.canvas = document.getElementById('canvas');
+        XRNA.canvasBounds = XRNA.canvas.getBoundingClientRect();
         if (inputUrl) {
             XRNA.handleInputUrl(inputUrl);
 
@@ -144,86 +143,48 @@ export class XRNA {
                 outputUrls.forEach(outputUrl => XRNA.handleOutputUrl(outputUrl));
             }
         }
-        XRNA.reset();
-        // window.addEventListener('resize', _event => XRNA.renderScene(), true);
-        XRNA.canvas.addEventListener('wheel', function(event) {
-            XRNA.sceneTickScale += Math.sign(-event.deltaY);
-            XRNA.renderScene();
-        });
-        XRNA.canvas.addEventListener('mouseup', event => XRNA.handleButtonRelease(event));
-        XRNA.canvas.addEventListener('mousemove', event => XRNA.handleMouseMove(event));
-        XRNA.canvas.addEventListener('mousedown', event => XRNA.handleButtonPress(event));
-        XRNA.canvas.addEventListener('contextmenu', event => event.preventDefault());
 
         // Collect the allowable input file extensions.
         document.getElementById('input').setAttribute('accept', (Object.keys(XRNA.inputParserDictionary) as Array<string>).map(extension => "." + extension).join(', '));
         // Collect the allowable output file extensions.
         document.getElementById('output').setAttribute('accept', (Object.keys(XRNA.outputWriterDictionary) as Array<string>).map(extension => "." + extension).join(', '));
-    }
 
-    private static handleMouseMove(event) : void {
-        switch (XRNA.buttonIndex) {
-            case BUTTON_INDEX.LEFT:
-                break;
-            case BUTTON_INDEX.MIDDLE:
-                break;
-            case BUTTON_INDEX.RIGHT:
-                if (XRNA.onDragFlag) {
-                    let
-                        displacementX = event.pageX - XRNA.onDragX,
-                        displacementY = event.pageY - XRNA.onDragY;
-                    if (XRNA.selectedNucleotideIDs.size == 0) {
-                        XRNA.sceneOriginX = XRNA.cacheCanvasOriginX + displacementX;
-                        XRNA.sceneOriginY = XRNA.cacheCanvasOriginY + displacementY;
-                    }
-                    XRNA.renderScene();
-                }
-                break;
+        XRNA.canvas.oncontextmenu = event => {
+            event.preventDefault();
+            return false;
         }
-    }
-
-    private static handleButtonPress(event) : void {
-        XRNA.buttonIndex = XRNA.getButtonIndex(event);
-        switch (XRNA.buttonIndex) {
-            case BUTTON_INDEX.LEFT:
-                // let
-                //     idsOfElementsWithBoundingBoxesContainingMouse = XRNA.idsOfElementsWithBoundingBoxesContainingMouse(event.pageX, event.pageY);
-                    
-                break;
-            case BUTTON_INDEX.MIDDLE:
-                break;
-            case BUTTON_INDEX.RIGHT:
-                XRNA.onDragX = event.pageX;
-                XRNA.onDragY = event.pageY;
-                XRNA.onDragFlag = true;
-                break;
-        } 
-    }
-
-    private static handleButtonRelease(event) : void {
-        switch (XRNA.buttonIndex) {
-            case BUTTON_INDEX.LEFT:
-                XRNA.onDragFlag = false;
-                break;
-            case BUTTON_INDEX.MIDDLE:
-                break;
-            case BUTTON_INDEX.RIGHT:
-                XRNA.onDragFlag = false;
-                if (XRNA.selectedNucleotideIDs.size == 0) {
-                    XRNA.cacheCanvasOriginY = XRNA.sceneOriginY;
-                    XRNA.cacheCanvasOriginX = XRNA.sceneOriginX;
-                } else {
-                    XRNA.selectedNucleotideIDs.forEach(selectedNucleotideID => {
-                        let
-                            idStrings = selectedNucleotideID.match(/\d+/g),
-                            nucleotide = XRNA.rnaMolecules[parseInt(idStrings[0])][0][parseInt(idStrings[1])];
-                        nucleotide.x += event.pageX - XRNA.onDragX;
-                        nucleotide.y += event.pageY - XRNA.onDragY;
-                    });
-                    XRNA.prepareScene();
-                    XRNA.renderScene();
-                }
-                break;
+        XRNA.canvas.onmousedown = event => {
+            let newButtonIndex = XRNA.getButtonIndex(event)
+            let pressedButtonIndex = newButtonIndex - XRNA.buttonIndex;
+            XRNA.buttonIndex = newButtonIndex;
+            switch (pressedButtonIndex) {
+                case BUTTON_INDEX.RIGHT:
+                    XRNA.sceneDressingData.onDragX = event.pageX;
+                    XRNA.sceneDressingData.onDragY = event.pageY;
+                    return false;
+            }
+        };
+        XRNA.canvas.onmouseup = event => {
+            let newButtonIndex = XRNA.getButtonIndex(event);
+            let releasedButtonIndex = XRNA.buttonIndex - newButtonIndex;
+            XRNA.buttonIndex = newButtonIndex;
+            switch (releasedButtonIndex) {
+                case BUTTON_INDEX.RIGHT:
+                    XRNA.sceneDressingData.cacheOriginX = XRNA.sceneDressingData.originX;
+                    XRNA.sceneDressingData.cacheOriginY = XRNA.sceneDressingData.originY;
+                    return false;
+            }
+        };
+        XRNA.canvas.onmousemove = event => {
+            switch (XRNA.buttonIndex) {
+                case BUTTON_INDEX.RIGHT:
+                case BUTTON_INDEX.LEFT_RIGHT:
+                case BUTTON_INDEX.LEFT_MIDDLE_RIGHT:
+                    XRNA.sceneDressingData.originX = XRNA.sceneDressingData.cacheOriginX + event.pageX - XRNA.sceneDressingData.onDragX;
+                    XRNA.sceneDressingData.originY = XRNA.sceneDressingData.cacheOriginY + event.pageY - XRNA.sceneDressingData.onDragY;
+                    XRNA.updateSceneDressing();
+                    break;
+            }
         }
     }
 
@@ -244,19 +205,23 @@ export class XRNA {
         throw new Error("Unrecognized button index: " + index);
     }
 
-    private static reset(resetRNAMoleculesFlag = true, resetSceneFlag = true) : void {
-        if (resetRNAMoleculesFlag) {
-            XRNA.rnaMolecules = new Array<[Array<Nucleotide>, number]>();
-        }
-        XRNA.sceneOriginX = 0;
-        XRNA.sceneOriginY = 0;
-        XRNA.cacheCanvasOriginX = 0;
-        XRNA.cacheCanvasOriginY = 0;
-        XRNA.sceneTickScale = 0;
-        XRNA.onDragFlag = false;
-        if (resetSceneFlag) {
-            XRNA.renderScene();
-        }
+    public static reset() : void {
+        XRNA.rnaMolecules = new Array<[Nucleotide[], number]>();
+        XRNA.resetView();
+    }
+
+    public static resetView() : void {
+        XRNA.sceneDressingData.originX = 0;
+        XRNA.sceneDressingData.originY = 0;
+        XRNA.sceneDressingData.zoom = 0;
+        XRNA.sceneDressingData.cacheOriginX = 0;
+        XRNA.sceneDressingData.cacheOriginY = 0;
+        XRNA.updateSceneDressing();
+    }
+
+    public static updateSceneDressing() : void {
+        let scale = Math.pow(1.1, XRNA.sceneDressingData.zoom);
+        document.getElementById('sceneDressing').setAttribute('transform', 'translate(' + XRNA.sceneDressingData.originX + ' ' + XRNA.sceneDressingData.originY + ') scale(' + scale + ' ' + scale + ')');
     }
 
     public static handleInputUrl(inputUrl : string) : void {
@@ -266,11 +231,26 @@ export class XRNA {
     }
 
     public static handleInputFile(inputFile : Blob, fileExtension : string) : void {
-        XRNA.reset(false, false);
-        let inputParser = XRNA.inputParserDictionary[fileExtension];
-        inputParser(inputFile);
-
-    }
+        XRNA.reset();
+        new Promise(executor => {
+            let fileReader = new FileReader();
+            fileReader.addEventListener('load', () => executor(fileReader.result.toString()));
+            fileReader.readAsText(inputFile, 'UTF-8');
+        }).then(fileAsText => {
+            let inputParser = XRNA.inputParserDictionary[fileExtension];
+            inputParser(<string>fileAsText);
+            XRNA.prepareScene();
+            window.onresize = event => {
+                XRNA.canvasBounds = XRNA.canvas.getBoundingClientRect();
+                XRNA.fitSceneToBounds();
+            };
+            XRNA.canvas.onwheel = event => {
+                XRNA.sceneDressingData.zoom += Math.sign(event.deltaY);
+                XRNA.updateSceneDressing();
+                return false;
+            };
+        });
+    } 
 
     public static handleOutputUrl(outputUrl : string) : void {
         outputUrl = outputUrl.trim().toLowerCase();
@@ -295,9 +275,7 @@ export class XRNA {
         return blob;
     }
 
-    private static refIDs : [number, number][];
-
-    public static parseXMLHelper(root : Document | Element) {
+    public static parseXMLHelper(root : Document | Element, parsingData : ParsingData) : void {
         for (let index = 0; index < root.children.length; index++) {
             let subElement : Element;
             subElement = root.children[index];
@@ -315,7 +293,7 @@ export class XRNA {
                     break;
                 }
                 case "Nuc": {
-                    XRNA.refIDs = new Array<[number, number]>();
+                    parsingData.refIDs = new Array<[number, number]>();
                     let refIDsString = subElement.getAttribute('RefID') ?? subElement.getAttribute('RefIDs');
                     if (!refIDsString) {
                         throw new Error('Within the input file, a <Nuc> element is missing its RefID(s) attribute.');
@@ -326,13 +304,13 @@ export class XRNA {
                         throw new Error('Within the input file, a <Nuc> element\'s refID(s) attribute is improperly formatted. It should be a comma-separated list of integers, or ordered integer pairs separated by \'-\'.');
                     }
                     let firstNucleotideIndex = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1][1];
-                    let refIDs = refIDsString.split(',').forEach(splitElement => {
+                    refIDsString.split(',').forEach(splitElement => {
                         let matchedGroups = splitElement.match(/^(-?\d+)-(-?\d+)$/);
                         if (matchedGroups) {
-                            XRNA.refIDs.push([parseInt(matchedGroups[1]) - firstNucleotideIndex, parseInt(matchedGroups[2]) - firstNucleotideIndex]);
+                            parsingData.refIDs.push([parseInt(matchedGroups[1]) - firstNucleotideIndex, parseInt(matchedGroups[2]) - firstNucleotideIndex]);
                         } else {
                             let refID = parseInt(splitElement) - firstNucleotideIndex;
-                            XRNA.refIDs.push([refID, refID]);
+                            parsingData.refIDs.push([refID, refID]);
                         }
                     });
                     break;
@@ -390,7 +368,7 @@ export class XRNA {
                         }
                     });
                     let nucleotides = XRNA.rnaMolecules[XRNA.rnaMolecules.length - 1][0];
-                    XRNA.refIDs.forEach(refIDPair => {
+                    parsingData.refIDs.forEach(refIDPair => {
                         for (let i = refIDPair[0]; i <= refIDPair[1]; i++) {
                             nucleotides[i].labelContent = labelContent;
                             nucleotides[i].labelLine = labelLine;
@@ -496,192 +474,67 @@ export class XRNA {
                     break;
                 }
             }
-            XRNA.parseXMLHelper(subElement);
+            XRNA.parseXMLHelper(subElement, parsingData);
         }
     }
 
-    public static parseXML(inputFile : Blob) : void {
-        let reader = new FileReader();
-        reader.addEventListener('load', function() {
-            let parsed = new DOMParser().parseFromString(this.result.toString(), "text/xml");
-            XRNA.parseXMLHelper(parsed);
-            XRNA.renderScene();
-        });
-        reader.readAsText(inputFile, "UTF-8");
+    private static getBoundingBox(htmlElement : SVGTextElement | HTMLElement) : DOMRect {
+        let boundingBox = htmlElement.getBoundingClientRect();
+        boundingBox.y -= XRNA.canvasBounds.y;
+        return boundingBox;
     }
 
-    public static parseXRNA(inputFile : Blob) : void {
-        let reader = new FileReader();
-        reader.addEventListener('load', function() {
-            let xmlContent = this.result.toString();
-            if (!xmlContent.match(/^\s*<!DOCTYPE/)) {
-                xmlContent = "<!DOCTYPE ComplexDocument [\
-                    <!ELEMENT ComplexDocument (SceneNodeGeom?, ComplexDocument*, Label*, LabelList*, Complex*, WithComplex*)>\
-                    <!ATTLIST ComplexDocument Name CDATA #REQUIRED Author CDATA #IMPLIED ExpandUponWrite CDATA #IMPLIED PSScale CDATA #IMPLIED LandscapeMode CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT Complex (SceneNodeGeom?, Label*, LabelList*, RNAMolecule*, ProteinMolecule*)>\
-                    <!ATTLIST Complex Name CDATA #REQUIRED Author CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT WithComplex (SceneNodeGeom?, Label*, LabelList*, RNAMolecule*, ProteinMolecule*)>\
-                    <!ATTLIST WithComplex Name CDATA #REQUIRED Author CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT RNAMolecule (SceneNodeGeom?, Label*, LabelList*, Nuc*, NucSegment*, (NucListData | Nuc)*, RNAFile*, BasePairs*, BasePair*, Parent?, AlignmentFile?)>\
-                    <!ATTLIST RNAMolecule Name CDATA #REQUIRED Author CDATA #IMPLIED>\
-                    <!-- parent is like for e.coli being the numbering --> \
-                    \
-                    <!ELEMENT Parent (RNAMolecule)>\
-                    \
-                    <!ELEMENT AlignmentFile (#PCDATA)> \
-                    \
-                    <!ELEMENT BasePairs EMPTY>\
-                    <!ATTLIST BasePairs nucID CDATA #REQUIRED bpNucID CDATA #REQUIRED length CDATA #REQUIRED bpName CDATA #IMPLIED>\
-                    \
-                    <!-- BasePair can be used after above BasePairs is implemented and refers to base pairs already set, even across strands. -->\
-                    <!ELEMENT BasePair EMPTY>\
-                    <!ATTLIST BasePair RefID CDATA #IMPLIED RefIDs CDATA #IMPLIED Type (Canonical | Wobble | MisMatch | Weak | Phosphate | Unknown) 'Unknown' Line5PDeltaX CDATA #IMPLIED Line5PDeltaY CDATA #IMPLIED Line3PDeltaX CDATA #IMPLIED Line3PDeltaY CDATA #IMPLIED LabelDeltaX CDATA #IMPLIED LabelDeltaY CDATA #IMPLIED Label5PSide CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT NucListData (#PCDATA)>\
-                    <!ATTLIST NucListData StartNucID CDATA #IMPLIED DataType (NucChar | NucID.NucChar | NucID.NucChar.XPos.YPos | NucChar.XPos.YPos | NucID.NucChar.XPos.YPos.FormatType.BPID) 'NucID.NucChar.XPos.YPos.FormatType.BPID'> \
-                    \
-                    <!ELEMENT Label (StringLabel | CircleLabel | Trianglelabel | LineLabel | ParallelogramLabel)>\
-                    <!ATTLIST Label XPos CDATA #REQUIRED YPos CDATA #REQUIRED Color CDATA #IMPLIED>\
-                    \
-                    <!ELEMENT StringLabel EMPTY> \
-                    <!ATTLIST StringLabel FontName CDATA #IMPLIED FontType CDATA #IMPLIED FontSize CDATA #REQUIRED Angle CDATA #IMPLIED  Text CDATA #REQUIRED>\
-                    \
-                    <!ELEMENT CircleLabel EMPTY> \
-                    <!ATTLIST CircleLabel Arc0 CDATA #IMPLIED Arc1 CDATA #IMPLIED Radius CDATA #IMPLIED LineWidth CDATA #IMPLIED IsOpen CDATA #IMPLIED>\
-                    \
-                    <!ELEMENT TriangleLabel EMPTY>\
-                    <!ATTLIST TriangleLabel TopPtX CDATA #REQUIRED TopPtY CDATA #REQUIRED LeftPtX CDATA #REQUIRED LeftPtY CDATA #REQUIRED RightPtX CDATA #REQUIRED RightPtY CDATA #REQUIRED LineWidth CDATA #IMPLIED IsOpen CDATA #IMPLIED>\
-                    \
-                    <!ELEMENT LineLabel EMPTY> \
-                    <!ATTLIST LineLabel X1 CDATA #REQUIRED Y1 CDATA #REQUIRED LineWidth CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT ParallelogramLabel EMPTY>\
-                    <!ATTLIST ParallelogramLabel Angle1 CDATA #REQUIRED Side1 CDATA #REQUIRED Angle2 CDATA #REQUIRED Side2 CDATA #REQUIRED LineWidth CDATA #IMPLIED IsOpen CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT LabelList (#PCDATA)>\
-                    \
-                    <!ELEMENT NucSegment (NucChars)> \
-                    <!ATTLIST NucSegment StartNucID CDATA #IMPLIED> \
-                    \
-                    <!ELEMENT NucChars (#PCDATA)>\
-                    \
-                    <!ELEMENT NucSymbol (#PCDATA)> \
-                    \
-                    <!ELEMENT Nuc (Label*, LabelList?, NucSymbol?)>\
-                    <!ATTLIST Nuc NucID CDATA #IMPLIED NucChar CDATA #IMPLIED XPos CDATA #IMPLIED YPos CDATA #IMPLIED Color CDATA #IMPLIED FontID CDATA #IMPLIED FontSize CDATA #IMPLIED FormatType CDATA #IMPLIED BPParent CDATA #IMPLIED BPNucID CDATA #IMPLIED RefID CDATA #IMPLIED RefIDs CDATA #IMPLIED IsHidden CDATA #IMPLIED GroupName CDATA #IMPLIED IsSchematic CDATA #IMPLIED SchematicColor CDATA #IMPLIED SchematicLineWidth CDATA #IMPLIED SchematicBPLineWidth CDATA #IMPLIED SchematicBPGap CDATA #IMPLIED SchematicFPGap CDATA #IMPLIED SchematicTPGap CDATA #IMPLIED IsNucPath CDATA #IMPLIED NucPathColor CDATA #IMPLIED NucPathLineWidth CDATA #IMPLIED>\
-                    \
-                    <!ELEMENT RNAFile EMPTY>\
-                    <!ATTLIST RNAFile FileName CDATA #REQUIRED FileType (NucChar | NucID.NucChar | NucID.NucChar.XPos.YPos | NucID.NucChar.XPos.YPos.FormatType.BPID) 'NucID.NucChar.XPos.YPos.FormatType.BPID'>\
-                    \
-                    <!ELEMENT SceneNodeGeom EMPTY>\
-                    <!ATTLIST SceneNodeGeom CenterX CDATA #IMPLIED CenterY CDATA #IMPLIED Scale CDATA #IMPLIED>\
-                ]>\n" + xmlContent;
-            }
-            let parsed = new DOMParser().parseFromString(xmlContent, "text/xml");
-            XRNA.parseXMLHelper(parsed);
-            XRNA.prepareScene();
-            XRNA.renderScene();
-        });
-        reader.readAsText(inputFile, "UTF-8");
+    public static parseXML(fileAsText : string) : void {
+        XRNA.parseXMLHelper(new DOMParser().parseFromString(fileAsText, 'text/xml'), null);
     }
 
-    public static parseSVG(inputFile : Blob) : void {
-
-    }
-
-    public static parseSTR(inputFile : Blob) : void {
-
-    }
-
-    public static writeSVG(outputFile : Blob) : void {
-
-    }
-
-    public static writeCSV(outputFile : Blob) : void {
-
-    }
-
-    public static writeXRNA(outputFile : Blob) : void {
-
-    }
-
-    public static writeBPSeq(outputFile : Blob) : void {
-
-    }
-
-    public static writeTR(outputFile : Blob) : void {
-
-    }
-
-    private static toggleNucleotide(id : string) : void {
-        // Toggle the presenece of id in XRNA.selectedNucleotideIDs
-        if (!XRNA.selectedNucleotideIDs.delete(id)) {
-            XRNA.selectedNucleotideIDs.add(id);
+    public static parseXRNA(inputFileAsText : string) : void {
+        if (!inputFileAsText.match(/^\s*<!DOCTYPE/)) {
+            inputFileAsText = "<!DOCTYPE ComplexDocument [\
+                <!ELEMENT ComplexDocument (SceneNodeGeom?, ComplexDocument*, Label*, LabelList*, Complex*, WithComplex*)>\
+                <!ATTLIST ComplexDocument Name CDATA #REQUIRED Author CDATA #IMPLIED ExpandUponWrite CDATA #IMPLIED PSScale CDATA #IMPLIED LandscapeMode CDATA #IMPLIED> \
+                <!ELEMENT Complex (SceneNodeGeom?, Label*, LabelList*, RNAMolecule*, ProteinMolecule*)>\
+                <!ATTLIST Complex Name CDATA #REQUIRED Author CDATA #IMPLIED> \
+                <!ELEMENT WithComplex (SceneNodeGeom?, Label*, LabelList*, RNAMolecule*, ProteinMolecule*)>\
+                <!ATTLIST WithComplex Name CDATA #REQUIRED Author CDATA #IMPLIED> \
+                <!ELEMENT RNAMolecule (SceneNodeGeom?, Label*, LabelList*, Nuc*, NucSegment*, (NucListData | Nuc)*, RNAFile*, BasePairs*, BasePair*, Parent?, AlignmentFile?)>\
+                <!ATTLIST RNAMolecule Name CDATA #REQUIRED Author CDATA #IMPLIED>\
+                <!-- parent is like for e.coli being the numbering --> \
+                <!ELEMENT Parent (RNAMolecule)>\
+                <!ELEMENT AlignmentFile (#PCDATA)> \
+                <!ELEMENT BasePairs EMPTY>\
+                <!ATTLIST BasePairs nucID CDATA #REQUIRED bpNucID CDATA #REQUIRED length CDATA #REQUIRED bpName CDATA #IMPLIED>\
+                <!-- BasePair can be used after above BasePairs is implemented and refers to base pairs already set, even across strands. -->\
+                <!ELEMENT BasePair EMPTY>\
+                <!ATTLIST BasePair RefID CDATA #IMPLIED RefIDs CDATA #IMPLIED Type (Canonical | Wobble | MisMatch | Weak | Phosphate | Unknown) 'Unknown' Line5PDeltaX CDATA #IMPLIED Line5PDeltaY CDATA #IMPLIED Line3PDeltaX CDATA #IMPLIED Line3PDeltaY CDATA #IMPLIED LabelDeltaX CDATA #IMPLIED LabelDeltaY CDATA #IMPLIED Label5PSide CDATA #IMPLIED> \
+                <!ELEMENT NucListData (#PCDATA)>\
+                <!ATTLIST NucListData StartNucID CDATA #IMPLIED DataType (NucChar | NucID.NucChar | NucID.NucChar.XPos.YPos | NucChar.XPos.YPos | NucID.NucChar.XPos.YPos.FormatType.BPID) 'NucID.NucChar.XPos.YPos.FormatType.BPID'> \
+                <!ELEMENT Label (StringLabel | CircleLabel | Trianglelabel | LineLabel | ParallelogramLabel)>\
+                <!ATTLIST Label XPos CDATA #REQUIRED YPos CDATA #REQUIRED Color CDATA #IMPLIED>\
+                <!ELEMENT StringLabel EMPTY> \
+                <!ATTLIST StringLabel FontName CDATA #IMPLIED FontType CDATA #IMPLIED FontSize CDATA #REQUIRED Angle CDATA #IMPLIED  Text CDATA #REQUIRED>\
+                <!ELEMENT CircleLabel EMPTY> \
+                <!ATTLIST CircleLabel Arc0 CDATA #IMPLIED Arc1 CDATA #IMPLIED Radius CDATA #IMPLIED LineWidth CDATA #IMPLIED IsOpen CDATA #IMPLIED>\
+                <!ELEMENT TriangleLabel EMPTY>\
+                <!ATTLIST TriangleLabel TopPtX CDATA #REQUIRED TopPtY CDATA #REQUIRED LeftPtX CDATA #REQUIRED LeftPtY CDATA #REQUIRED RightPtX CDATA #REQUIRED RightPtY CDATA #REQUIRED LineWidth CDATA #IMPLIED IsOpen CDATA #IMPLIED>\
+                <!ELEMENT LineLabel EMPTY> \
+                <!ATTLIST LineLabel X1 CDATA #REQUIRED Y1 CDATA #REQUIRED LineWidth CDATA #IMPLIED> \
+                <!ELEMENT ParallelogramLabel EMPTY>\
+                <!ATTLIST ParallelogramLabel Angle1 CDATA #REQUIRED Side1 CDATA #REQUIRED Angle2 CDATA #REQUIRED Side2 CDATA #REQUIRED LineWidth CDATA #IMPLIED IsOpen CDATA #IMPLIED> \
+                <!ELEMENT LabelList (#PCDATA)>\
+                <!ELEMENT NucSegment (NucChars)> \
+                <!ATTLIST NucSegment StartNucID CDATA #IMPLIED> \
+                <!ELEMENT NucChars (#PCDATA)>\
+                <!ELEMENT NucSymbol (#PCDATA)> \
+                <!ELEMENT Nuc (Label*, LabelList?, NucSymbol?)>\
+                <!ATTLIST Nuc NucID CDATA #IMPLIED NucChar CDATA #IMPLIED XPos CDATA #IMPLIED YPos CDATA #IMPLIED Color CDATA #IMPLIED FontID CDATA #IMPLIED FontSize CDATA #IMPLIED FormatType CDATA #IMPLIED BPParent CDATA #IMPLIED BPNucID CDATA #IMPLIED RefID CDATA #IMPLIED RefIDs CDATA #IMPLIED IsHidden CDATA #IMPLIED GroupName CDATA #IMPLIED IsSchematic CDATA #IMPLIED SchematicColor CDATA #IMPLIED SchematicLineWidth CDATA #IMPLIED SchematicBPLineWidth CDATA #IMPLIED SchematicBPGap CDATA #IMPLIED SchematicFPGap CDATA #IMPLIED SchematicTPGap CDATA #IMPLIED IsNucPath CDATA #IMPLIED NucPathColor CDATA #IMPLIED NucPathLineWidth CDATA #IMPLIED>\
+                <!ELEMENT RNAFile EMPTY>\
+                <!ATTLIST RNAFile FileName CDATA #REQUIRED FileType (NucChar | NucID.NucChar | NucID.NucChar.XPos.YPos | NucID.NucChar.XPos.YPos.FormatType.BPID) 'NucID.NucChar.XPos.YPos.FormatType.BPID'>\
+                <!ELEMENT SceneNodeGeom EMPTY>\
+                <!ATTLIST SceneNodeGeom CenterX CDATA #IMPLIED CenterY CDATA #IMPLIED Scale CDATA #IMPLIED>\
+            ]>\n" + inputFileAsText;
         }
-        XRNA.prepareScene();
-        XRNA.renderScene();
-    }
-
-    public static prepareScene() : void {
-        let
-            rnaMoleculesNucleotidesInnerHTMLs = new Array<string>(),
-            rnaMoleculesLabelLinesInnerHTMLs = new Array<string>(),
-            rnaMoleculesLabelContentsInnerHTMLs = new Array<string>();
-
-        for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
-            let rnaMolecule = XRNA.rnaMolecules[rnaMoleculeIndex];
-            let nucleotides = rnaMolecule[0];
-            let nucleotideFirstIndex = rnaMolecule[1];
-            for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
-                let nucleotide = nucleotides[nucleotideIndex];
-                let nucleotideID = XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex);
-                let nucleotideColor = XRNA.selectedNucleotideIDs.has(nucleotideID) ? [255, 0, 0] : nucleotide.color;
-                rnaMoleculesNucleotidesInnerHTMLs.push('<text id=\'' + nucleotideID + '\' x=\'' + nucleotide.x + '\' y=\'' + nucleotide.y + '\' font-size=\'' + nucleotide.font[0] + '\' font-family=\'' + nucleotide.font[1] + '\' stroke=\'rgb(' + nucleotideColor[0] + ' ' + nucleotideColor[1] + ' ' + nucleotideColor[2] + ')\' onclick=\'XRNA.toggleNucleotide(this.id);\'>' + nucleotide.symbol + '</text>');
-                let nucleotideLabelContent = nucleotide.labelContent;
-                if (nucleotideLabelContent) {
-                    let nucleotideLabelContentColor = nucleotideLabelContent[3];
-                    rnaMoleculesLabelContentsInnerHTMLs.push('<text id=\'' + XRNA.labelContentID(rnaMoleculeIndex, nucleotideIndex) + '\' x=\'' + (nucleotideLabelContent[0] + nucleotide.x) + '\' y=\'' + (nucleotideLabelContent[1] + nucleotide.y) + '\' font-size=\'' + nucleotide.font[0] + '\' font-family=\'' + nucleotide.font[1] + '\' stroke=\'rgb(' + nucleotideLabelContentColor[0] + ' ' + nucleotideLabelContentColor[1] + ' ' + nucleotideLabelContentColor[2] + ')\'>' + nucleotideLabelContent[2] + '</text>');
-                }
-                let nucleotideLabelLine = nucleotide.labelLine;
-                if (nucleotideLabelLine) {
-                    rnaMoleculesLabelLinesInnerHTMLs.push('<line x1=\'' + (nucleotideLabelLine[0] + nucleotide.x) + '\' y1=\'' + (nucleotideLabelLine[1] + nucleotide.y) + '\' x2=\'' + (nucleotideLabelLine[2] + nucleotide.x) +'\' y2=\'' + (nucleotideLabelLine[3] + nucleotide.y) + '\' stroke=\'white\'></line>');
-                }
-            }
-        }
-        XRNA.canvasInnerHTML = rnaMoleculesNucleotidesInnerHTMLs.join('') + rnaMoleculesLabelContentsInnerHTMLs.join('') + rnaMoleculesLabelLinesInnerHTMLs.join('');
-    }
-
-    // public static idsOfElementsWithBoundingBoxesContainingMouse(x : number, y : number) : Array<string> {
-    //     let boundingBoxesContainingMouse = new Array<string>();
-    //     for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
-
-    //         for (let ) {
-
-    //         }
-    //     }
-    //     return boundingBoxesContainingMouse;
-    // }
-
-    public static renderScene() : void {
-        XRNA.canvas.innerHTML = XRNA.canvasInnerHTML;
-        let rnaMoleculesBondLinesInnerHTMLs = new Array<string>();
-
-        for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
-            let nucleotides = XRNA.rnaMolecules[rnaMoleculeIndex][0];
-            for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
-                let nucleotide = nucleotides[nucleotideIndex];
-                if (nucleotide.index < nucleotide.basePairIndex && nucleotide.basePairIndex >= 0 && nucleotide.basePairIndex < nucleotides.length) {
-                    let
-                        boundingBox0 = (<any>document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex))).getBBox(),
-                        boundingBox1 = (<any>document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotide.basePairIndex))).getBBox();
-                    rnaMoleculesBondLinesInnerHTMLs.push('<line x1=\'' + (boundingBox0.x + boundingBox0.width / 2.0) + '\' y1=\'' + (boundingBox0.y + boundingBox0.height / 2.0) + '\' x2=\'' + (boundingBox1.x + boundingBox1.width / 2.0) + '\' y2=\'' + (boundingBox1.y + boundingBox1.height / 2.0) + '\' stroke=\'white\'/>');
-                }
-            }
-        }
-        XRNA.canvas.innerHTML += rnaMoleculesBondLinesInnerHTMLs.join('');
+        XRNA.parseXMLHelper(new DOMParser().parseFromString(inputFileAsText, "text/xml"), new ParsingData());
     }
 
     public static rnaMoleculeID(rnaMoleculeIndex : number) : string {
@@ -689,10 +542,151 @@ export class XRNA {
     }
 
     public static nucleotideID(rnaMoleculeIndex : number, nucleotideIndex : number) : string {
-        return XRNA.rnaMoleculeID(rnaMoleculeIndex) + ' - Nucleotide #' + nucleotideIndex;
+        return XRNA.rnaMoleculeID(rnaMoleculeIndex) + ': Nucleotide #' + nucleotideIndex;
     }
 
     public static labelContentID(rnaMoleculeIndex : number, nucleotideIndex : number) : string {
-        return XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex) + ' - Label Content';
+        return XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex) + ': Label Content';
+    }
+
+    public static fitSceneToBounds() : void {
+        // Scale to fit the screen
+        let sceneScale = Math.min(this.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), this.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
+        XRNA.sceneTransform.unshift('scale(' + sceneScale + ' ' + sceneScale + ')');
+        // Center scene along the y axis.
+        XRNA.sceneTransform.unshift('translate(0 ' + this.canvasBounds.height + ')');
+        document.getElementById('scene').setAttribute('transform', XRNA.sceneTransform.join(' '));
+        // Remove the elements of XRNA.sceneTransform which were added by fitSceneToBounds().
+        // This is necessary to ensure correct scene fitting when fitSceneToBounds() is called multiple times.
+        // This occurs during window resizing.
+        XRNA.sceneTransform.shift();
+        XRNA.sceneTransform.shift();
+    }
+
+    public static linearlyInterpolate(x0 : number, x1 : number, interpolationFactor : number) : number {
+        // See https://en.wikipedia.org/wiki/Linear_interpolation
+        return (1 - interpolationFactor) * x0 + interpolationFactor * x1;
+    }
+
+    public static invertYTransform(y : number) : string {
+        return 'translate(0 ' + y + ') scale(1 -1) translate(0 ' + -y +')';
+    }
+
+    public static prepareScene() : void {
+        const svgNameSpaceURL = 'http://www.w3.org/2000/svg';
+        while (XRNA.canvas.firstChild) {
+            XRNA.canvas.removeChild(XRNA.canvas.firstChild);
+        }
+        let sceneDressingHTML = document.createElementNS(svgNameSpaceURL, 'g');
+        sceneDressingHTML.setAttribute('id', 'sceneDressing');
+        XRNA.canvas.appendChild(sceneDressingHTML);
+        let sceneHTML = document.createElementNS(svgNameSpaceURL, 'g');
+        sceneHTML.setAttribute('id', 'scene');
+        sceneDressingHTML.appendChild(sceneHTML);
+        XRNA.sceneBounds.minimumX = Number.MAX_VALUE,
+        XRNA.sceneBounds.maximumX = -Number.MAX_VALUE,
+        XRNA.sceneBounds.minimumY = Number.MAX_VALUE,
+        XRNA.sceneBounds.maximumY = -Number.MAX_VALUE;
+        for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < XRNA.rnaMolecules.length; rnaMoleculeIndex++) {
+            let rnaMoleculeHTML = document.createElementNS(svgNameSpaceURL, 'g');
+            let rnaMoleculeID = XRNA.rnaMoleculeID(rnaMoleculeIndex);
+            rnaMoleculeHTML.setAttribute('id', rnaMoleculeID);
+            sceneHTML.appendChild(rnaMoleculeHTML);
+            let labelContentsGroupHTML = document.createElementNS(svgNameSpaceURL, 'g');
+            labelContentsGroupHTML.setAttribute('id', rnaMoleculeID + ': Labels: Contents');
+            rnaMoleculeHTML.appendChild(labelContentsGroupHTML);
+            let labelLinesGroupHTML = document.createElementNS(svgNameSpaceURL, 'g');
+            labelLinesGroupHTML.setAttribute('id', rnaMoleculeID + ': Labels: Lines');
+            rnaMoleculeHTML.appendChild(labelLinesGroupHTML);
+            let bondLinesGroupHTML = document.createElementNS(svgNameSpaceURL, 'g');
+            bondLinesGroupHTML.setAttribute('id', rnaMoleculeID + ': Bond Lines');
+            rnaMoleculeHTML.appendChild(bondLinesGroupHTML);
+            let rnaMolecule = XRNA.rnaMolecules[rnaMoleculeIndex];
+            let nucleotides = rnaMolecule[0];
+            for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
+                let nucleotide = nucleotides[nucleotideIndex];
+                let nucleotideHTML = document.createElementNS(svgNameSpaceURL, 'text');
+                nucleotideHTML.textContent = nucleotide.symbol;
+                nucleotideHTML.setAttribute('id', XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex));
+                nucleotideHTML.setAttribute('x', '' + nucleotide.x);
+                nucleotideHTML.setAttribute('y', '' + nucleotide.y);
+                let nucleotideColor = nucleotide.color;
+                nucleotideHTML.setAttribute('stroke', 'rgb(' + nucleotideColor[0] + ' ' + nucleotideColor[1] + ' ' + nucleotideColor[2] + ')');
+                nucleotideHTML.setAttribute('font-size', '' + nucleotide.font[0]);
+                nucleotideHTML.setAttribute('font-family', nucleotide.font[1]);
+                nucleotideHTML.setAttribute('transform', XRNA.invertYTransform(nucleotide.y));
+                rnaMoleculeHTML.appendChild(nucleotideHTML);
+                let boundingBoxes = new Array<DOMRect>();
+                let nucleotideBoundingBox = XRNA.getBoundingBox(nucleotideHTML);
+                boundingBoxes.push(nucleotideBoundingBox);
+                let nucleotideBoundingBoxCenterX = nucleotideBoundingBox.x + nucleotideBoundingBox.width / 2.0;
+                let nucleotideBoundingBoxCenterY = nucleotideBoundingBox.y + nucleotideBoundingBox.height / 2.0;
+                if (nucleotide.labelLine) {
+                    let lineHTML = document.createElementNS(svgNameSpaceURL, 'line');
+                    let labelLine = nucleotide.labelLine;
+                    lineHTML.setAttribute('x1', '' + (nucleotideBoundingBoxCenterX + labelLine[0]));
+                    lineHTML.setAttribute('y1', '' + (nucleotideBoundingBoxCenterY + labelLine[1]));
+                    lineHTML.setAttribute('x2', '' + (nucleotideBoundingBoxCenterX + labelLine[2]));
+                    lineHTML.setAttribute('y2', '' + (nucleotideBoundingBoxCenterY + labelLine[3]));
+                    // Hardcode white for now.
+                    lineHTML.setAttribute('stroke', 'white');
+                    labelLinesGroupHTML.appendChild(lineHTML);
+                }
+                if (nucleotide.labelContent) {
+                    let contentHTML = document.createElementNS(svgNameSpaceURL, 'text');
+                    let labelContent = nucleotide.labelContent;
+                    contentHTML.setAttribute('x', '' + (nucleotideBoundingBoxCenterX + labelContent[0]));
+                    let y = (nucleotideBoundingBoxCenterY + labelContent[1]);
+                    contentHTML.setAttribute('y', '' + y);
+                    contentHTML.textContent = labelContent[2];
+                    let labelColor = labelContent[3];
+                    contentHTML.setAttribute('stroke', 'rgb(' + labelColor[0] + ' ' + labelColor[1] + ' ' + labelColor[2] + ')');
+                    contentHTML.setAttribute('font-size', '' + nucleotide.font[0]);
+                    contentHTML.setAttribute('font-family', nucleotide.font[1]);
+                    contentHTML.setAttribute('transform', XRNA.invertYTransform(y));
+                    labelContentsGroupHTML.appendChild(contentHTML);
+                    boundingBoxes.push(contentHTML.getBoundingClientRect());
+                }
+                // Only render the bond lines once.
+                // If we use the nucleotide with the greater index, we can can reference the other nucleotide's HTML.
+                if (nucleotide.basePairIndex >= 0 && nucleotideIndex > nucleotide.basePairIndex) {
+                    let bondLineHTML = document.createElementNS(svgNameSpaceURL, 'line');
+                    let basePairedNucleotideBounds = XRNA.getBoundingBox(document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotide.basePairIndex)));
+                    let basePairedNucleotideBoundsCenterX = basePairedNucleotideBounds.x + basePairedNucleotideBounds.width / 2.0;
+                    let basePairedNucleotideBoundsCenterY = basePairedNucleotideBounds.y + basePairedNucleotideBounds.height / 2.0;
+                    bondLineHTML.setAttribute('x1', '' + XRNA.linearlyInterpolate(nucleotideBoundingBoxCenterX, basePairedNucleotideBoundsCenterX, 0.25));
+                    bondLineHTML.setAttribute('y1', '' + XRNA.linearlyInterpolate(nucleotideBoundingBoxCenterY, basePairedNucleotideBoundsCenterY, 0.25));
+                    bondLineHTML.setAttribute('x2', '' + XRNA.linearlyInterpolate(nucleotideBoundingBoxCenterX, basePairedNucleotideBoundsCenterX, 0.75));
+                    bondLineHTML.setAttribute('y2', '' + XRNA.linearlyInterpolate(nucleotideBoundingBoxCenterY, basePairedNucleotideBoundsCenterY, 0.75));
+                    // Hardcode white for now.
+                    bondLineHTML.setAttribute('stroke', 'white');
+                    bondLinesGroupHTML.appendChild(bondLineHTML);
+                }
+
+                boundingBoxes.forEach(boundingBox => {
+                    let
+                        xPlusWidth = boundingBox.x + boundingBox.width,
+                        yPlusHeight = boundingBox.y + boundingBox.height;
+                    if (boundingBox.x < XRNA.sceneBounds.minimumX) {
+                        XRNA.sceneBounds.minimumX = boundingBox.x;
+                    }
+                    if (xPlusWidth > XRNA.sceneBounds.maximumX) {
+                        XRNA.sceneBounds.maximumX = xPlusWidth;
+                    }
+                    if (boundingBox.y < XRNA.sceneBounds.minimumY) {
+                        XRNA.sceneBounds.minimumY = boundingBox.y;
+                    }
+                    if (yPlusHeight > XRNA.sceneBounds.maximumY) {
+                        XRNA.sceneBounds.maximumY = yPlusHeight;
+                    }
+                });
+            }
+        }
+        XRNA.sceneTransform = new Array<string>();
+        // Translate the scene to the origin.
+        XRNA.sceneTransform.unshift('translate(' + -XRNA.sceneBounds.minimumX + ' ' + -XRNA.sceneBounds.minimumY + ')');
+        // Invert the y axis.
+        XRNA.sceneTransform.unshift('scale(1 -1)');
+        XRNA.fitSceneToBounds();
     }
 }

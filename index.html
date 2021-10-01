@@ -34,9 +34,10 @@
             <br>
             <input type="file" id="output", onchange="XRNA.handleOutputFile(this.files[0], this.value.split('.')[1]);">
             <br>
-            <button onclick="XRNA.reset(false, true);">Reset</button>
+            <button onclick="XRNA.resetView();">Reset</button>
         </div>
         <svg id="canvas" class="canvas" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" style="background-color:rgb(0, 0, 0);" xml:space="preserve">
+            <g id='sceneDressing'></g>
         </svg>
         <script type="text/JavaScript">            
             XRNA.main(null, [], false);
