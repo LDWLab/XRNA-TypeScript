@@ -257,7 +257,8 @@ export class XRNA {
                 XRNA.fitSceneToBounds();
             };
             XRNA.canvas.onwheel = event => {
-                XRNA.sceneDressingData.zoom += Math.sign(event.deltaY);
+                // Intuitive scrolling of the middle-mouse wheel requires negation of deltaY.
+                XRNA.sceneDressingData.zoom -= Math.sign(event.deltaY);
                 XRNA.updateSceneDressing();
                 return false;
             };
@@ -596,7 +597,10 @@ export class XRNA {
     }
 
     public static writeSVG() : string {
-        throw new Error('Not implemented yet.');
+        let canvas = <HTMLElement>XRNA.canvas.cloneNode(true);
+        canvas.removeAttribute('id');
+        canvas.removeAttribute('class');
+        return canvas.outerHTML;
     }
 
     private static getBoundingBox(htmlElement : SVGTextElement | HTMLElement) : DOMRect {
@@ -621,13 +625,10 @@ export class XRNA {
         // Scale to fit the screen
         let sceneScale = Math.min(XRNA.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), XRNA.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
         XRNA.sceneTransform.unshift('scale(' + sceneScale + ' ' + sceneScale + ')');
-        // Center scene along the y axis.
-        XRNA.sceneTransform.unshift('translate(0 ' + XRNA.canvasBounds.height + ')');
         document.getElementById('scene').setAttribute('transform', XRNA.sceneTransform.join(' '));
         // Remove the elements of XRNA.sceneTransform which were added by fitSceneToBounds().
         // This is necessary to ensure correct scene fitting when fitSceneToBounds() is called multiple times.
         // This occurs during window resizing.
-        XRNA.sceneTransform.shift();
         XRNA.sceneTransform.shift();
     }
 
@@ -703,8 +704,9 @@ export class XRNA {
                 if (nucleotide.labelContent) {
                     let contentHTML = document.createElementNS(svgNameSpaceURL, 'text');
                     let labelContent = nucleotide.labelContent;
-                    contentHTML.setAttribute('x', '' + (nucleotideBoundingBoxCenterX + labelContent[0]));
-                    let y = (nucleotideBoundingBoxCenterY + labelContent[1]);
+                    let x = nucleotideBoundingBoxCenterX + labelContent[0];
+                    contentHTML.setAttribute('x', '' + x);
+                    let y = nucleotideBoundingBoxCenterY + labelContent[1];
                     contentHTML.setAttribute('y', '' + y);
                     contentHTML.textContent = labelContent[2];
                     let labelColor = labelContent[3];
@@ -713,7 +715,13 @@ export class XRNA {
                     contentHTML.setAttribute('font-family', nucleotide.font[1]);
                     contentHTML.setAttribute('transform', XRNA.invertYTransform(y));
                     labelContentsGroupHTML.appendChild(contentHTML);
-                    boundingBoxes.push(contentHTML.getBoundingClientRect());
+                    let boundingBox = XRNA.getBoundingBox(contentHTML);
+                    // Make corrections to the content's position
+                    contentHTML.setAttribute('x', '' + (x - boundingBox.width / 2.0));
+                    contentHTML.setAttribute('y', '' + (y + boundingBox.height / 3.0));
+                    // Recalculate the bounding box. Manual correction appears ineffective.
+                    boundingBox = XRNA.getBoundingBox(contentHTML);
+                    boundingBoxes.push(boundingBox);
                 }
                 // Only render the bond lines once.
                 // If we use the nucleotide with the greater index, we can can reference the other nucleotide's HTML.
@@ -753,8 +761,10 @@ export class XRNA {
         XRNA.sceneTransform = new Array<string>();
         // Translate the scene to the origin.
         XRNA.sceneTransform.unshift('translate(' + -XRNA.sceneBounds.minimumX + ' ' + -XRNA.sceneBounds.minimumY + ')');
-        // Invert the y axis.
+        // Invert the y axis. Note that graphical y axes are inverted in comparison to standard cartesian coordinates.
         XRNA.sceneTransform.unshift('scale(1 -1)');
+        // Center the scene along the y axis.
+        XRNA.sceneTransform.unshift('translate(0 ' + (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY) + ')');
         XRNA.fitSceneToBounds();
     }
 }

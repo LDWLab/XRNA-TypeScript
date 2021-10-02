@@ -94,10 +94,9 @@ var XRNA = /** @class */ (function () {
                 outputUrls.forEach(function (outputUrl) { return XRNA.handleOutputUrl(outputUrl); });
             }
         }
-        // Collect the allowable input file extensions.
+        // Collect the supported input file extensions.
         document.getElementById('input').setAttribute('accept', Object.keys(XRNA.inputParserDictionary).map(function (extension) { return "." + extension; }).join(', '));
-        // Collect the allowable output file extensions.
-        // document.getElementById('output').setAttribute('accept', (Object.keys(XRNA.outputWriterDictionary) as Array<string>).map(extension => "." + extension).join(', '));
+        // Collect the supported output file extensions.
         var outputFileExtensionElement = document.getElementById('output file extension');
         Object.keys(XRNA.outputWriterDictionary).forEach(function (extension) {
             var option = document.createElement('option');
@@ -199,7 +198,8 @@ var XRNA = /** @class */ (function () {
                 XRNA.fitSceneToBounds();
             };
             XRNA.canvas.onwheel = function (event) {
-                XRNA.sceneDressingData.zoom += Math.sign(event.deltaY);
+                // Intuitive scrolling of the middle-mouse wheel requires negation of deltaY.
+                XRNA.sceneDressingData.zoom -= Math.sign(event.deltaY);
                 XRNA.updateSceneDressing();
                 return false;
             };
@@ -536,7 +536,10 @@ var XRNA = /** @class */ (function () {
         return xrnaFrontHalf + xrnaBackHalf;
     };
     XRNA.writeSVG = function () {
-        throw new Error('Not implemented yet.');
+        var canvas = XRNA.canvas.cloneNode(true);
+        canvas.removeAttribute('id');
+        canvas.removeAttribute('class');
+        return canvas.outerHTML;
     };
     XRNA.getBoundingBox = function (htmlElement) {
         var boundingBox = htmlElement.getBoundingClientRect();
@@ -556,13 +559,10 @@ var XRNA = /** @class */ (function () {
         // Scale to fit the screen
         var sceneScale = Math.min(XRNA.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), XRNA.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
         XRNA.sceneTransform.unshift('scale(' + sceneScale + ' ' + sceneScale + ')');
-        // Center scene along the y axis.
-        XRNA.sceneTransform.unshift('translate(0 ' + XRNA.canvasBounds.height + ')');
         document.getElementById('scene').setAttribute('transform', XRNA.sceneTransform.join(' '));
         // Remove the elements of XRNA.sceneTransform which were added by fitSceneToBounds().
         // This is necessary to ensure correct scene fitting when fitSceneToBounds() is called multiple times.
         // This occurs during window resizing.
-        XRNA.sceneTransform.shift();
         XRNA.sceneTransform.shift();
     };
     XRNA.linearlyInterpolate = function (x0, x1, interpolationFactor) {
@@ -635,8 +635,9 @@ var XRNA = /** @class */ (function () {
                 if (nucleotide.labelContent) {
                     var contentHTML = document.createElementNS(svgNameSpaceURL, 'text');
                     var labelContent = nucleotide.labelContent;
-                    contentHTML.setAttribute('x', '' + (nucleotideBoundingBoxCenterX + labelContent[0]));
-                    var y = (nucleotideBoundingBoxCenterY + labelContent[1]);
+                    var x = nucleotideBoundingBoxCenterX + labelContent[0];
+                    contentHTML.setAttribute('x', '' + x);
+                    var y = nucleotideBoundingBoxCenterY + labelContent[1];
                     contentHTML.setAttribute('y', '' + y);
                     contentHTML.textContent = labelContent[2];
                     var labelColor = labelContent[3];
@@ -645,7 +646,13 @@ var XRNA = /** @class */ (function () {
                     contentHTML.setAttribute('font-family', nucleotide.font[1]);
                     contentHTML.setAttribute('transform', XRNA.invertYTransform(y));
                     labelContentsGroupHTML.appendChild(contentHTML);
-                    boundingBoxes.push(contentHTML.getBoundingClientRect());
+                    var boundingBox = XRNA.getBoundingBox(contentHTML);
+                    // Make corrections to the content's position
+                    contentHTML.setAttribute('x', '' + (x - boundingBox.width / 2.0));
+                    contentHTML.setAttribute('y', '' + (y + boundingBox.height / 3.0));
+                    // Recalculate the bounding box. Manual correction appears ineffective.
+                    boundingBox = XRNA.getBoundingBox(contentHTML);
+                    boundingBoxes.push(boundingBox);
                 }
                 // Only render the bond lines once.
                 // If we use the nucleotide with the greater index, we can can reference the other nucleotide's HTML.
@@ -682,8 +689,10 @@ var XRNA = /** @class */ (function () {
         XRNA.sceneTransform = new Array();
         // Translate the scene to the origin.
         XRNA.sceneTransform.unshift('translate(' + -XRNA.sceneBounds.minimumX + ' ' + -XRNA.sceneBounds.minimumY + ')');
-        // Invert the y axis.
+        // Invert the y axis. Note that graphical y axes are inverted in comparison to standard cartesian coordinates.
         XRNA.sceneTransform.unshift('scale(1 -1)');
+        // Center the scene along the y axis.
+        XRNA.sceneTransform.unshift('translate(0 ' + (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY) + ')');
         XRNA.fitSceneToBounds();
     };
     XRNA.sceneDressingData = {
