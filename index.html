@@ -21,16 +21,35 @@
 
         <script>
             var exports={};
+
+            function rgbShadeInverter(rgbString) {
+                let rgbStrings = rgbString.match(/\d+/g);
+                let rgb = [parseInt(rgbStrings[0]), parseInt(rgbStrings[1]), parseInt(rgbStrings[2])];
+                return "rgb(" + (255 - rgb[0]) + " " + (255 - rgb[1]) + " " + (255 - rgb[2]) + ")";
+            }
+
+            function darkModeHelper() {
+                ["canvas", "controls"].forEach(id => {
+                    let style = document.getElementById(id).style;
+                    ["background-color"].forEach(propertyName => {
+                        let propertyValue = style.getPropertyValue(propertyName);
+                        if (propertyValue) {
+                            style.setProperty(propertyName, rgbShadeInverter(propertyValue));
+                        }
+                    });
+                });
+            }
         </script>
         <script type="text/JavaScript" src="./XRNA.js"></script>
     </head>
     <body>
-        <div id="controls" class="controls">
+        <div id="controls" class="controls" style='background-color:rgb(255, 255, 255);color:rgb(0, 0, 0);'>
             <button onclick='["Edit Tab", "Format Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("IO Tab").style.display="block";'>File import / export</button>
             <button onclick='["IO Tab", "Format Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Edit Tab").style.display="block";'>Edit</button>
             <button onclick='["IO Tab", "Edit Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Format Tab").style.display="block";'>Format</button>
+            <input id='dark mode' type='checkbox' onchange='darkModeHelper()'>Dark Mode</input>
             <div id='IO Tab'>
-                <label for="input">Choose an input file:</label>
+                <label id='input label' for="input">Choose an input file:</label>
                 <input type="file" id="input" onchange="
                     let split = this.value.split('.');
                     let path = split[0];
@@ -52,11 +71,12 @@
                 Place Formatting Tools Here!
             </div>
         </div>
-        <svg id="canvas" class="canvas" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" style="background-color:rgb(0, 0, 0);" xml:space="preserve">
+        <svg id="canvas" class="canvas" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" style="background-color:rgb(255, 255, 255);" xml:space="preserve">
             <g id='sceneDressing'></g>
         </svg>
         <script type="text/JavaScript">            
             XRNA.main(null, [], false);
+            // document.getElementById('dark mode').click();
         </script>
     </body>
 </html>
