@@ -19,10 +19,6 @@ interface FileWriter {
 
 class ParsingData {
     public refIds = new Array<[number, number]>();
-    public colorAsString : string;
-    public fontIdAsString : string;
-    public refIdAttributeName : string;
-    public refIdBody : string;
 }
 
 interface VoidFunction<T> {
@@ -100,8 +96,8 @@ class Nucleotide {
 
 export class XRNA {
     // Allow for multiple RNA molecules, each containing nucleotides.
-    // [Nucleotide[], firstNucleotideIndex, name, [refIDs[], RefIdObject][]][]
-    private static rnaMolecules : Array<[Array<Nucleotide>, number, string, Array<ParsingData>]>;
+    // [Nucleotide[], firstNucleotideIndex, name][]
+    private static rnaMolecules : Array<[Array<Nucleotide>, number, string]>;
 
     private static canvas : HTMLElement;
 
@@ -237,7 +233,7 @@ export class XRNA {
     }
 
     public static reset() : void {
-        XRNA.rnaMolecules = new Array<[Nucleotide[], number, string, Array<ParsingData>]>();
+        XRNA.rnaMolecules = new Array<[Nucleotide[], number, string]>();
         XRNA.resetView();
     }
 
@@ -331,8 +327,9 @@ export class XRNA {
         return rgb;
     }
 
-    public static compressRGB(red : number, green : number, blue : number) : number {
-        return (red << 16) | (green << 8) | (blue);
+    // Converts the input RGB values to a hexadecimal string 
+    public static compressRGB(rgb : [number, number, number]) : string {
+        return ((rgb[0] << 16) | (rgb[1] << 8) | (rgb[2])).toString(16);
     }
 
     public static applyHelperFunctionsToRefIDs(refIDs : Array<[number, number]>, helperFunctions : Array<VoidFunction<Nucleotide>>) : void {
@@ -365,19 +362,13 @@ export class XRNA {
                 }
                 case "RNAMolecule": {
                     let name = subElement.getAttribute('Name') ?? 'Unknown';
-                    XRNA.rnaMolecules.push([null, null, name, new Array<ParsingData>()]);
+                    XRNA.rnaMolecules.push([null, null, name]);
                     break;
                 }
                 case "Nuc": {
                     parsingData.refIds = new Array<[number, number]>();
-                    XRNA.rnaMolecules.at(-1)[3].push(parsingData);
                     let refIdsString = subElement.getAttribute('RefID');
-                    if (refIdsString) {
-                        parsingData.refIdAttributeName = 'RefID';
-                        parsingData.refIdBody = refIdsString;
-                    } else {
-                        parsingData.refIdAttributeName = 'RefIDs';
-                        parsingData.refIdBody = refIdsString;
+                    if (!refIdsString) {
                         refIdsString = subElement.getAttribute('RefIDs');
                         if (!refIdsString) {
                             throw new Error("Within the input file, a <Nuc> element is missing its RefID and RefIDs attributes.");
@@ -404,13 +395,11 @@ export class XRNA {
                     let helperFunctions = new Array<VoidFunction<Nucleotide>>();
                     let colorAsString = subElement.getAttribute('Color');
                     if (colorAsString) {
-                        parsingData.colorAsString = colorAsString;
                         let rgb = XRNA.parseRGB(colorAsString);
                         helperFunctions.push(nucleotide => nucleotide.color = rgb);
                     }
                     let fontIDAsString = subElement.getAttribute('FontID');
                     if (fontIDAsString) {
-                        parsingData.fontIdAsString = fontIDAsString;
                         let fontID = parseInt(fontIDAsString);
                         if (isNaN(fontID)) {
                             throw new Error('Invalid fontID: ' + fontIDAsString + ' is not an integer.');
@@ -656,24 +645,26 @@ export class XRNA {
             xrnaFrontHalf += '<RNAMolecule Name=\'' + rnaMolecule[2] + '\'>\n';
             xrnaBackHalf = '\n</RNAMolecule>' + xrnaBackHalf;
             xrnaFrontHalf += '<NucListData StartNucID=\'' + firstNucleotideIndex + '\' DataType=\'NucChar.XPos.YPos\'>\n';
+            let nucs = '';
             let nucLabelLists = '';
             let basePairs = '';
             for (let nucleotideIndex = 0; nucleotideIndex < nucleotides.length; nucleotideIndex++) {
                 let nucleotide = nucleotides[nucleotideIndex];
                 xrnaFrontHalf += nucleotide.symbol + ' ' + nucleotide.x + ' ' + nucleotide.y + '\n';
+                nucs += '<Nuc RefID=\'' + (firstNucleotideIndex + nucleotideIndex) + '\' Color=\'' + XRNA.compressRGB(nucleotide.color) + '\' FontID=\'' + XRNA.fontToFontID(nucleotide.font) + '\'></Nuc>'
                 
                 if (nucleotide.labelContent || nucleotide.labelContent) {
                     nucLabelLists += '<Nuc RefID=\'' + (firstNucleotideIndex + nucleotideIndex) + '\'>\n<LabelList>\n';
                     if (nucleotide.labelLine) {
                         let line = nucleotide.labelLine;
                         let lineColor = line[5];
-                        nucLabelLists += 'l ' + line[0] + ' ' + line[1] + ' ' + line[2] + ' ' + line[3] + ' ' + line[4] + ' ' + XRNA.compressRGB(lineColor[0], lineColor[1], lineColor[2]) + ' 0.0 0 0 0 0\n';
+                        nucLabelLists += 'l ' + line[0] + ' ' + line[1] + ' ' + line[2] + ' ' + line[3] + ' ' + line[4] + ' ' + XRNA.compressRGB(lineColor) + ' 0.0 0 0 0 0\n';
                     }
                     if (nucleotide.labelContent) {
                         let content = nucleotide.labelContent;
                         let contentColor = content[4];
                         let contentFont = content[3];
-                        nucLabelLists += 's ' + content[0] + ' ' + content[1] + ' 0.0 ' + contentFont[0] + ' ' + XRNA.fontToFontID(contentFont) + ' ' + XRNA.compressRGB(contentColor[0], contentColor[1], contentColor[2]) + ' \"' + content[2] + '\"\n';
+                        nucLabelLists += 's ' + content[0] + ' ' + content[1] + ' 0.0 ' + contentFont[0] + ' ' + XRNA.fontToFontID(contentFont) + ' ' + XRNA.compressRGB(contentColor) + ' \"' + content[2] + '\"\n';
                     }
                     nucLabelLists += '</LabelList>\n</Nuc>\n';
                 }
@@ -683,6 +674,7 @@ export class XRNA {
             }
             xrnaFrontHalf += '</NucListData>\n';
             xrnaFrontHalf += '<Nuc RefIDs=\'' + firstNucleotideIndex + '-' + (firstNucleotideIndex + nucleotides.length - 1) + '\' IsSchematic=\'false\' SchematicColor=\'0\' SchematicLineWidth=\'1.5\' SchematicBPLineWidth=\'1.0\' SchematicBPGap=\'2.0\' SchematicFPGap=\'2.0\' SchematicTPGap=\'2.0\' IsNucPath=\'false\' NucPathColor=\'ff0000\' NucPathLineWidth=\'0.0\' />\n';
+            xrnaFrontHalf += nucs;
             xrnaFrontHalf += nucLabelLists;
             xrnaFrontHalf += basePairs;
         }
