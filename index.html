@@ -29,7 +29,7 @@
             }
 
             function darkModeHelper() {
-                ["canvas", "controls"].forEach(id => {
+                ["canvas"].forEach(id => {
                     let style = document.getElementById(id).style;
                     ["background-color"].forEach(propertyName => {
                         let propertyValue = style.getPropertyValue(propertyName);
@@ -43,11 +43,11 @@
         <script type="text/JavaScript" src="./XRNA.js"></script>
     </head>
     <body>
-        <div id="controls" class="controls" style='background-color:rgb(255, 255, 255);color:rgb(0, 0, 0);'>
+        <div id="controls" class="controls" style='background-color:rgb(230, 230, 230);color:rgb(0, 0, 0);'>
             <button onclick='["Edit Tab", "Format Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("IO Tab").style.display="block";'>File import / export</button>
             <button onclick='["IO Tab", "Format Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Edit Tab").style.display="block";'>Edit</button>
             <button onclick='["IO Tab", "Edit Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Format Tab").style.display="block";'>Format</button>
-            <input id='dark mode' type='checkbox' onchange='darkModeHelper()'>Dark Mode</input>
+            <!-- <input id='dark mode' type='checkbox' onchange='darkModeHelper()'>Dark Mode</input> -->
             <div id='IO Tab'>
                 <label id='input label' for="input">Choose an input file:</label>
                 <input type="file" id="input" onchange="
