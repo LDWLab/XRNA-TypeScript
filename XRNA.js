@@ -90,6 +90,9 @@ var XRNA = /** @class */ (function () {
         if (inputUrl === void 0) { inputUrl = null; }
         if (outputUrls === void 0) { outputUrls = null; }
         if (printVersionFlag === void 0) { printVersionFlag = false; }
+        var zoomSlider = document.getElementById('zoom slider');
+        zoomSlider.setAttribute('min', '' + XRNA.sceneDressingData.minimumZoom);
+        zoomSlider.setAttribute('max', '' + XRNA.sceneDressingData.maximumZoom);
         if (printVersionFlag) {
             console.log("XRNA-GT-TypeScript 9/30/21");
         }
@@ -180,9 +183,14 @@ var XRNA = /** @class */ (function () {
         XRNA.sceneDressingData.cacheOriginX = 0;
         XRNA.sceneDressingData.cacheOriginY = 0;
         XRNA.updateSceneDressing();
+        document.getElementById('zoom slider').value = XRNA.sceneDressingData.zoom;
+    };
+    XRNA.setZoom = function (zoom) {
+        XRNA.sceneDressingData.zoom = XRNA.clamp(XRNA.sceneDressingData.minimumZoom, zoom, XRNA.sceneDressingData.maximumZoom);
+        XRNA.updateSceneDressing();
     };
     XRNA.updateSceneDressing = function () {
-        var scale = Math.pow(1.1, XRNA.sceneDressingData.zoom);
+        var scale = Math.pow(1.05, XRNA.sceneDressingData.zoom);
         document.getElementById('sceneDressing').setAttribute('transform', 'translate(' + XRNA.sceneDressingData.originX + ' ' + XRNA.sceneDressingData.originY + ') scale(' + scale + ' ' + scale + ')');
     };
     XRNA.handleInputUrl = function (inputUrl) {
@@ -206,8 +214,8 @@ var XRNA = /** @class */ (function () {
             };
             XRNA.canvas.onwheel = function (event) {
                 // Intuitive scrolling of the middle-mouse wheel requires negation of deltaY.
-                XRNA.sceneDressingData.zoom -= Math.sign(event.deltaY);
-                XRNA.updateSceneDressing();
+                XRNA.setZoom(XRNA.sceneDressingData.zoom - Math.sign(event.deltaY));
+                document.getElementById('zoom slider').value = XRNA.sceneDressingData.zoom;
                 return false;
             };
         });
@@ -260,6 +268,9 @@ var XRNA = /** @class */ (function () {
     // Converts the input RGB values to a hexadecimal string 
     XRNA.compressRGB = function (rgb) {
         return ((rgb[0] << 16) | (rgb[1] << 8) | (rgb[2])).toString(16);
+    };
+    XRNA.clamp = function (minimum, value, maximum) {
+        return Math.min(Math.max(minimum, value), maximum);
     };
     XRNA.applyHelperFunctionsToRefIDs = function (refIDs, helperFunctions) {
         refIDs.forEach(function (refIDPair) {
@@ -924,6 +935,8 @@ var XRNA = /** @class */ (function () {
         XRNA.fitSceneToBounds();
     };
     XRNA.sceneDressingData = {
+        maximumZoom: 48,
+        minimumZoom: -48,
         originX: 0,
         originY: 0,
         // zoom is on a linear scale. It is converted to exponential before use.

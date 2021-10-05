@@ -108,6 +108,8 @@ export class XRNA {
     private static complexName : string;
 
     private static sceneDressingData = {
+        maximumZoom : 48,
+        minimumZoom : -48,
         originX : 0,
         originY : 0,
         // zoom is on a linear scale. It is converted to exponential before use.
@@ -150,6 +152,9 @@ export class XRNA {
     }
 
     public static main(inputUrl = <string>null, outputUrls = <string[]>null, printVersionFlag = false) : void {
+        let zoomSlider = document.getElementById('zoom slider');
+        zoomSlider.setAttribute('min', '' + XRNA.sceneDressingData.minimumZoom);
+        zoomSlider.setAttribute('max', '' + XRNA.sceneDressingData.maximumZoom);
         if (printVersionFlag) {
             console.log("XRNA-GT-TypeScript 9/30/21");
         }
@@ -244,10 +249,16 @@ export class XRNA {
         XRNA.sceneDressingData.cacheOriginX = 0;
         XRNA.sceneDressingData.cacheOriginY = 0;
         XRNA.updateSceneDressing();
+        (<any>document.getElementById('zoom slider')).value = XRNA.sceneDressingData.zoom;
+    }
+
+    public static setZoom(zoom : number) : void {
+        XRNA.sceneDressingData.zoom = XRNA.clamp(XRNA.sceneDressingData.minimumZoom, zoom, XRNA.sceneDressingData.maximumZoom);
+        XRNA.updateSceneDressing();
     }
 
     public static updateSceneDressing() : void {
-        let scale = Math.pow(1.1, XRNA.sceneDressingData.zoom);
+        let scale = Math.pow(1.05, XRNA.sceneDressingData.zoom);
         document.getElementById('sceneDressing').setAttribute('transform', 'translate(' + XRNA.sceneDressingData.originX + ' ' + XRNA.sceneDressingData.originY + ') scale(' + scale + ' ' + scale + ')');
     }
 
@@ -273,8 +284,8 @@ export class XRNA {
             };
             XRNA.canvas.onwheel = event => {
                 // Intuitive scrolling of the middle-mouse wheel requires negation of deltaY.
-                XRNA.sceneDressingData.zoom -= Math.sign(event.deltaY);
-                XRNA.updateSceneDressing();
+                XRNA.setZoom(XRNA.sceneDressingData.zoom - Math.sign(event.deltaY));
+                (<any>document.getElementById('zoom slider')).value = XRNA.sceneDressingData.zoom;
                 return false;
             };
         });
@@ -330,6 +341,10 @@ export class XRNA {
     // Converts the input RGB values to a hexadecimal string 
     public static compressRGB(rgb : [number, number, number]) : string {
         return ((rgb[0] << 16) | (rgb[1] << 8) | (rgb[2])).toString(16);
+    }
+
+    public static clamp(minimum : number, value : number, maximum : number) : number {
+        return Math.min(Math.max(minimum, value), maximum);
     }
 
     public static applyHelperFunctionsToRefIDs(refIDs : Array<[number, number]>, helperFunctions : Array<VoidFunction<Nucleotide>>) : void {
