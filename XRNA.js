@@ -78,6 +78,24 @@ var Nucleotide = /** @class */ (function () {
     };
     return Nucleotide;
 }());
+var SelectionConstraint;
+(function (SelectionConstraint) {
+    SelectionConstraint["SINGLE_NUCLEOTIDE"] = "RNA Single Nucleotide";
+    SelectionConstraint["SINGLE_STRAND"] = "RNA Single Strand";
+    SelectionConstraint["SINGLE_BASE_PAIR"] = "RNA Single Base Pair";
+    SelectionConstraint["RNA_HELIX"] = "RNA Helix";
+    SelectionConstraint["RNA_STACKED_HELIX"] = "RNA Stacked Helix";
+    SelectionConstraint["RNA_SUB_DOMAIN"] = "RNA Sub-domain";
+    SelectionConstraint["RNA_CYCLE"] = "RNA Cycle";
+    SelectionConstraint["RNA_LIST_NUCS"] = "RNA List Nucs";
+    SelectionConstraint["RNA_STRAND"] = "RNA Strand";
+    SelectionConstraint["RNA_COLOR_UNIT"] = "RNA Color Unit";
+    SelectionConstraint["RNA_NAMED_GROUP"] = "RNA Named Group";
+    SelectionConstraint["RNA_STRAND_GROUP"] = "RNA Strand Group";
+    SelectionConstraint["LABELS_ONLY"] = "Labels Only";
+    SelectionConstraint["ENTIRE_SCENE"] = "Entire Scene";
+})(SelectionConstraint || (SelectionConstraint = {}));
+var svgNameSpaceURL = 'http://www.w3.org/2000/svg';
 var XRNA = /** @class */ (function () {
     function XRNA() {
     }
@@ -103,6 +121,12 @@ var XRNA = /** @class */ (function () {
             if (outputUrls) {
                 outputUrls.forEach(function (outputUrl) { return XRNA.handleOutputUrl(outputUrl); });
             }
+        }
+        // Populate the selection-constraining drop-down with the supported constraints.
+        XRNA.selectionConstraint = document.getElementById('selection constraint');
+        for (var _i = 0, _a = Object.keys(SelectionConstraint); _i < _a.length; _i++) {
+            var selectionConstraint = _a[_i];
+            XRNA.selectionConstraint.appendChild(new Option(SelectionConstraint[selectionConstraint]));
         }
         // Collect the supported input file extensions.
         document.getElementById('input').setAttribute('accept', Object.keys(XRNA.inputParserDictionary).map(function (extension) { return "." + extension; }).join(', '));
@@ -174,6 +198,8 @@ var XRNA = /** @class */ (function () {
     };
     XRNA.reset = function () {
         XRNA.rnaMolecules = new Array();
+        XRNA.selection.boundingBoxHTMLs = new Array();
+        XRNA.selection.nucleotides = new Array();
         XRNA.resetView();
     };
     XRNA.resetView = function () {
@@ -635,11 +661,14 @@ var XRNA = /** @class */ (function () {
     XRNA.rnaMoleculeID = function (rnaMoleculeIndex) {
         return 'RNA Molecule #' + rnaMoleculeIndex;
     };
-    XRNA.nucleotideID = function (rnaMoleculeIndex, nucleotideIndex) {
-        return XRNA.rnaMoleculeID(rnaMoleculeIndex) + ': Nucleotide #' + nucleotideIndex;
+    XRNA.nucleotideID = function (parentID, nucleotideIndex) {
+        return parentID + ': Nucleotide #' + nucleotideIndex;
     };
-    XRNA.labelContentID = function (rnaMoleculeIndex, nucleotideIndex) {
-        return XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex) + ': Label Content';
+    XRNA.labelContentID = function (parentID) {
+        return parentID + ': Label Content';
+    };
+    XRNA.boundingBoxID = function (parentID) {
+        return parentID + ': Bounding Box';
     };
     XRNA.fitSceneToBounds = function () {
         // Scale to fit the screen
@@ -763,8 +792,140 @@ var XRNA = /** @class */ (function () {
                 return 20;
         }
     };
+    XRNA.alertBrokenSelectionConstraint = function (selectionConstraint) {
+        var requirementDescription;
+        var selectableDescription;
+        switch (selectionConstraint) {
+            case SelectionConstraint.SINGLE_NUCLEOTIDE:
+            case SelectionConstraint.SINGLE_STRAND: {
+                requirementDescription = 'a nucleotide without a base pair';
+                selectableDescription = 'a non-base-paired nucleotide';
+                break;
+            }
+            case SelectionConstraint.SINGLE_BASE_PAIR: {
+                requirementDescription = 'a nucleotide with a base pair and no adjacent base pairs';
+                selectableDescription = 'a base-paired nucleotide outside a series of base pairs';
+                break;
+            }
+            case SelectionConstraint.RNA_HELIX: {
+                requirementDescription = 'a nucleotide with a base pair';
+                selectableDescription = 'a base-paired nucleotide';
+                break;
+            }
+            default: {
+                throw new Error('Unsupported selection constraint: ' + selectionConstraint);
+            }
+        }
+        alert('The selection constraint \"' + selectionConstraint + '\" requires selection of ' + requirementDescription + '. Select ' + selectableDescription + ' or change the selection constraint.');
+    };
+    XRNA.onClickNucleotide = function (nucleotideHTML) {
+        XRNA.selection.boundingBoxHTMLs.forEach(function (boundingBoxHTML) {
+            boundingBoxHTML.setAttribute('stroke', 'none');
+        });
+        XRNA.selection.boundingBoxHTMLs = new Array();
+        XRNA.selection.nucleotides = new Array();
+        var indices = /^.*#(\d+).*#(\d+).*$/g.exec(nucleotideHTML.id);
+        var rnaMoleculeIndex = parseInt(indices[1]);
+        var nucleotideIndex = parseInt(indices[2]);
+        var nucleotides = XRNA.rnaMolecules[rnaMoleculeIndex][0];
+        var nucleotide = nucleotides[nucleotideIndex];
+        var selectionConstraint = XRNA.selectionConstraint.value;
+        var condition;
+        var adjacentNucleotideIndices = new Array();
+        var populateAdjacentNucleotideIndicesHelper;
+        var rnaMoleculeID = XRNA.rnaMoleculeID(rnaMoleculeIndex);
+        switch (selectionConstraint) {
+            case SelectionConstraint.SINGLE_NUCLEOTIDE: {
+                condition = nucleotide.basePairIndex < 0;
+                populateAdjacentNucleotideIndicesHelper = function () {
+                    adjacentNucleotideIndices.push(nucleotideIndex);
+                };
+                break;
+            }
+            case SelectionConstraint.SINGLE_STRAND: {
+                condition = nucleotide.basePairIndex < 0;
+                populateAdjacentNucleotideIndicesHelper = function () {
+                    for (var adjacentNucleotideIndex = nucleotideIndex - 1; adjacentNucleotideIndex >= 0 && nucleotides[adjacentNucleotideIndex].basePairIndex < 0; adjacentNucleotideIndex--) {
+                        adjacentNucleotideIndices.push(adjacentNucleotideIndex);
+                    }
+                    adjacentNucleotideIndices.push(nucleotideIndex);
+                    for (var adjacentNucleotideIndex = nucleotideIndex + 1; adjacentNucleotideIndex < nucleotides.length && nucleotides[adjacentNucleotideIndex].basePairIndex < 0; adjacentNucleotideIndex++) {
+                        adjacentNucleotideIndices.push(adjacentNucleotideIndex);
+                    }
+                };
+                break;
+            }
+            case SelectionConstraint.SINGLE_BASE_PAIR: {
+                // Check that the selected nucleotide has a base pair and there are no adjacent base pairs.
+                condition = nucleotide.basePairIndex >= 0 && (nucleotideIndex == 0 || nucleotides[nucleotideIndex - 1].basePairIndex < 0) && (nucleotideIndex == nucleotides.length - 1 || nucleotides[nucleotideIndex + 1].basePairIndex < 0);
+                populateAdjacentNucleotideIndicesHelper = function () {
+                    adjacentNucleotideIndices.push(nucleotideIndex);
+                    adjacentNucleotideIndices.push(nucleotide.basePairIndex);
+                };
+                break;
+            }
+            case SelectionConstraint.RNA_HELIX: {
+                condition = nucleotide.basePairIndex >= 0;
+                populateAdjacentNucleotideIndicesHelper = function () {
+                    adjacentNucleotideIndices.push(nucleotideIndex);
+                    adjacentNucleotideIndices.push(nucleotides[nucleotideIndex].basePairIndex);
+                    var adjacentNucleotideIndex = nucleotideIndex - 1;
+                    var lastBasePairIndex = -1;
+                    for (; adjacentNucleotideIndex >= 0 && nucleotides[adjacentNucleotideIndex].basePairIndex >= 0; adjacentNucleotideIndex--) {
+                        lastBasePairIndex = nucleotides[adjacentNucleotideIndex].basePairIndex;
+                        adjacentNucleotideIndices.push(adjacentNucleotideIndex);
+                        adjacentNucleotideIndices.push(lastBasePairIndex);
+                    }
+                    var singleStrandNucleotideIndices = new Array();
+                    for (; adjacentNucleotideIndex >= 0; adjacentNucleotideIndex--) {
+                        if (nucleotides[adjacentNucleotideIndex].basePairIndex >= 0) {
+                            if (adjacentNucleotideIndex == lastBasePairIndex) {
+                                adjacentNucleotideIndices = adjacentNucleotideIndices.concat(singleStrandNucleotideIndices);
+                            }
+                            break;
+                        }
+                        singleStrandNucleotideIndices.push(adjacentNucleotideIndex);
+                    }
+                    adjacentNucleotideIndex = nucleotideIndex + 1;
+                    lastBasePairIndex = -1;
+                    for (; adjacentNucleotideIndex < nucleotides.length && nucleotides[adjacentNucleotideIndex].basePairIndex >= 0; adjacentNucleotideIndex++) {
+                        lastBasePairIndex = nucleotides[adjacentNucleotideIndex].basePairIndex;
+                        adjacentNucleotideIndices.push(adjacentNucleotideIndex);
+                        adjacentNucleotideIndices.push(lastBasePairIndex);
+                    }
+                    singleStrandNucleotideIndices = new Array();
+                    for (; adjacentNucleotideIndex < nucleotides.length; adjacentNucleotideIndex++) {
+                        if (nucleotides[adjacentNucleotideIndex].basePairIndex >= 0) {
+                            if (adjacentNucleotideIndex == lastBasePairIndex) {
+                                adjacentNucleotideIndices = adjacentNucleotideIndices.concat(singleStrandNucleotideIndices);
+                            }
+                            break;
+                        }
+                        singleStrandNucleotideIndices.push(adjacentNucleotideIndex);
+                    }
+                };
+                break;
+            }
+            default: {
+                throw new Error('Unsupported selection constraint: ' + selectionConstraint);
+            }
+        }
+        if (condition) {
+            populateAdjacentNucleotideIndicesHelper();
+            adjacentNucleotideIndices.forEach(function (adjacentNucleotideIndex) {
+                XRNA.selection.boundingBoxHTMLs.push(document.getElementById(XRNA.boundingBoxID(XRNA.nucleotideID(rnaMoleculeID, adjacentNucleotideIndex))));
+                XRNA.selection.nucleotides.push(nucleotides[adjacentNucleotideIndex]);
+            });
+        }
+        else {
+            XRNA.alertBrokenSelectionConstraint(selectionConstraint);
+        }
+        XRNA.selection.boundingBoxHTMLs.forEach(function (boundingBoxHTML) {
+            boundingBoxHTML.setAttribute('stroke', 'red');
+            XRNA.selection.boundingBoxHTMLs.push(boundingBoxHTML);
+        });
+    };
     XRNA.prepareScene = function () {
-        var svgNameSpaceURL = 'http://www.w3.org/2000/svg';
         while (XRNA.canvas.firstChild) {
             XRNA.canvas.removeChild(XRNA.canvas.firstChild);
         }
@@ -792,13 +953,16 @@ var XRNA = /** @class */ (function () {
             var bondSymbolsGroupHTML = document.createElementNS(svgNameSpaceURL, 'g');
             bondSymbolsGroupHTML.setAttribute('id', rnaMoleculeID + ': Bond Lines');
             rnaMoleculeHTML.appendChild(bondSymbolsGroupHTML);
+            var boundingBoxesHTML = document.createElementNS(svgNameSpaceURL, 'g');
+            boundingBoxesHTML.setAttribute('id', rnaMoleculeID + ': Bounding Boxes');
+            rnaMoleculeHTML.appendChild(boundingBoxesHTML);
             var rnaMolecule = XRNA.rnaMolecules[rnaMoleculeIndex];
             var nucleotides = rnaMolecule[0];
             var _loop_2 = function (nucleotideIndex) {
                 var nucleotide = nucleotides[nucleotideIndex];
                 var nucleotideHTML = document.createElementNS(svgNameSpaceURL, 'text');
                 nucleotideHTML.textContent = nucleotide.symbol;
-                var nucleotideID = XRNA.nucleotideID(rnaMoleculeIndex, nucleotideIndex);
+                var nucleotideID = XRNA.nucleotideID(rnaMoleculeID, nucleotideIndex);
                 nucleotideHTML.setAttribute('id', nucleotideID);
                 nucleotideHTML.setAttribute('x', '' + nucleotide.x);
                 nucleotideHTML.setAttribute('y', '' + nucleotide.y);
@@ -809,9 +973,19 @@ var XRNA = /** @class */ (function () {
                 nucleotideHTML.setAttribute('font-style', nucleotide.font[2]);
                 nucleotideHTML.setAttribute('font-weight', nucleotide.font[3]);
                 nucleotideHTML.setAttribute('transform', XRNA.invertYTransform(nucleotide.y));
+                nucleotideHTML.setAttribute('onclick', 'XRNA.onClickNucleotide(this);');
                 rnaMoleculeHTML.appendChild(nucleotideHTML);
                 var boundingBoxes = new Array();
                 var nucleotideBoundingBox = XRNA.getBoundingBox(nucleotideHTML);
+                var boundingBoxHTML = document.createElementNS(svgNameSpaceURL, 'rect');
+                boundingBoxHTML.setAttribute('id', XRNA.boundingBoxID(nucleotideID));
+                boundingBoxHTML.setAttribute('x', '' + nucleotideBoundingBox.x);
+                boundingBoxHTML.setAttribute('y', '' + nucleotideBoundingBox.y);
+                boundingBoxHTML.setAttribute('width', '' + nucleotideBoundingBox.width);
+                boundingBoxHTML.setAttribute('height', '' + nucleotideBoundingBox.height);
+                boundingBoxHTML.setAttribute('stroke', 'none');
+                boundingBoxHTML.setAttribute('fill', 'none');
+                boundingBoxesHTML.appendChild(boundingBoxHTML);
                 boundingBoxes.push(nucleotideBoundingBox);
                 var nucleotideBoundingBoxCenterX = nucleotideBoundingBox.x + nucleotideBoundingBox.width / 2.0;
                 var nucleotideBoundingBoxCenterY = nucleotideBoundingBox.y + nucleotideBoundingBox.height / 2.0;
@@ -830,7 +1004,7 @@ var XRNA = /** @class */ (function () {
                 }
                 if (nucleotide.labelContent) {
                     var contentHTML = document.createElementNS(svgNameSpaceURL, 'text');
-                    contentHTML.setAttribute('id', nucleotideID + ': Label Content #' + nucleotideIndex);
+                    contentHTML.setAttribute('id', XRNA.labelContentID(nucleotideID));
                     var labelContent = nucleotide.labelContent;
                     var x = nucleotideBoundingBoxCenterX + labelContent[0];
                     contentHTML.setAttribute('x', '' + x);
@@ -858,7 +1032,7 @@ var XRNA = /** @class */ (function () {
                 // If we use the nucleotide with the greater index, we can can reference the other nucleotide's HTML.
                 if (nucleotide.basePairIndex >= 0 && nucleotideIndex > nucleotide.basePairIndex) {
                     var basePairedNucleotide = XRNA.rnaMolecules[rnaMoleculeIndex][0][nucleotide.basePairIndex];
-                    var basePairedNucleotideBounds = XRNA.getBoundingBox(document.getElementById(XRNA.nucleotideID(rnaMoleculeIndex, nucleotide.basePairIndex)));
+                    var basePairedNucleotideBounds = XRNA.getBoundingBox(document.getElementById(XRNA.nucleotideID(rnaMoleculeID, nucleotide.basePairIndex)));
                     var basePairedNucleotideBoundsCenterX_1 = basePairedNucleotideBounds.x + basePairedNucleotideBounds.width / 2.0;
                     var basePairedNucleotideBoundsCenterY_1 = basePairedNucleotideBounds.y + basePairedNucleotideBounds.height / 2.0;
                     var bondSymbolHTML_1;
@@ -964,6 +1138,10 @@ var XRNA = /** @class */ (function () {
     };
     // buttonIndex is always equal to the current mouse button(s) (see BUTTON_INDEX) depressed within the canvas.
     XRNA.buttonIndex = BUTTON_INDEX.NONE;
+    XRNA.selection = {
+        boundingBoxHTMLs: new Array(),
+        nucleotides: new Array()
+    };
     return XRNA;
 }());
 exports.XRNA = XRNA;

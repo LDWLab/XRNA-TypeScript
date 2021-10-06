@@ -9,11 +9,11 @@
                 padding: 0;
             }
             .controls {
-                height: 110px;
+                height: 120px;
             }
             .canvas {
                 width: 100%;
-                height: calc(100% - 110px);
+                height: calc(100% - 120px);
                 /* shape-rendering: optimizeSpeed; */
                 /* text-rendering: optimizeSpeed; */
             }
@@ -64,29 +64,14 @@
                 <br>
                 <button onclick="XRNA.resetView();">Reset View</button>
             </div>
-            <div id='Edit Tab' style="display : none;">
+            <div id='Edit Tab' style="display:none;">
                 Place Editing Tools Here!
             </div>
-            <div id='Format Tab' style="display : none;">
+            <div id='Format Tab' style="display:none;">
                 Place Formatting Tools Here!
             </div>
+            Selection constraint: <select id='selection constraint'></select>
             Zoom: -<input id='zoom slider' type='range' value='0' oninput='XRNA.setZoom(value);' />+
-            <select id='selection constraint'>
-                <option value='rna single nuc'>RNA Single Nucleotide</option>
-                <option value='rna single strand'>RNA Single Strand</option>
-                <option value='rna basepair'>RNA Base Pair</option>
-                <option value='rna helix'>RNA Helix</option>
-                <option value='rna stacked helix'>RNA Stacked Helix</option>
-                <option value='rna sub-domain'>RNA Sub-domain</option>
-                <option value='rna cycle'>RNA Cycle</option>
-                <option value='rna list nucs'>RNA List Nucs</option>
-                <option value='rna strand'>RNA Strand</option>
-                <option value='rna color unit'>RNA Color Unit</option>
-                <option value='rna named group'>RNA Named Group</option>
-                <option value='rna strand group'>RNA Strand Group</option>
-                <option value='labels only'>Labels Only</option>
-                <option value='entire scene'>Entire Scene</option>
-            </select>
         </div>
         <svg id="canvas" class="canvas" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" style="background-color:rgb(255, 255, 255);" xml:space="preserve">
             <g id='sceneDressing'></g>
