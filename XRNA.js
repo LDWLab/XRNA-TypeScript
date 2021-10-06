@@ -1165,7 +1165,48 @@ var XRNA = /** @class */ (function () {
                 return adjacentNucleotideIndices;
             };
             return class_4;
-        }(SelectionConstraint))('a nucleotide with a base pair', 'a base-paired nucleotide')
+        }(SelectionConstraint))('a nucleotide with a base pair', 'a base-paired nucleotide'),
+        'RNA Stacked Helix': new /** @class */ (function (_super) {
+            __extends(class_5, _super);
+            function class_5() {
+                return _super !== null && _super.apply(this, arguments) || this;
+            }
+            class_5.prototype.approveSelection = function (nucleotides, nucleotideIndex, basePairIndex) {
+                this.adjacentNucleotideIndices = new Array();
+                this.adjacentNucleotideIndices.push(nucleotideIndex);
+                if (basePairIndex >= 0) {
+                    this.adjacentNucleotideIndices.push(basePairIndex);
+                    return true;
+                }
+                this.adjacentNucleotideIndex0 = nucleotideIndex - 1;
+                this.adjacentNucleotideIndex1 = nucleotideIndex + 1;
+                for (;; this.adjacentNucleotideIndex0--) {
+                    if (this.adjacentNucleotideIndex0 < 0) {
+                        return false;
+                    }
+                    if (nucleotides[this.adjacentNucleotideIndex0].basePairIndex >= 0) {
+                        break;
+                    }
+                    this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
+                }
+                for (;; this.adjacentNucleotideIndex1++) {
+                    if (this.adjacentNucleotideIndex1 >= nucleotides.length) {
+                        return false;
+                    }
+                    if (nucleotides[this.adjacentNucleotideIndex1].basePairIndex >= 0) {
+                        break;
+                    }
+                    this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                }
+                return nucleotides[this.adjacentNucleotideIndex0].basePairIndex == this.adjacentNucleotideIndex1;
+            };
+            class_5.prototype.getAdjacentNucleotideIndices = function (nucleotides, nucleotideIndex, basePairIndex) {
+                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
+                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                return this.adjacentNucleotideIndices;
+            };
+            return class_5;
+        }(SelectionConstraint))('a nucleotide within a stacked helix', 'a nucleotide with proximate nucleotides on either side exclusively bonded to the other')
     };
     XRNA.sceneBounds = {
         minimumX: null,

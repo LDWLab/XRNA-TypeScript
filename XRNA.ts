@@ -266,22 +266,117 @@ export class XRNA {
             }
         }('a nucleotide with a base pair', 'a base-paired nucleotide'),
         'RNA Stacked Helix' : new class extends SelectionConstraint{
+            adjacentNucleotideIndices : Array<number>;
+            adjacentNucleotideIndex0 : number;
+            adjacentNucleotideIndex1 : number;
+
             approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
-                return basePairIndex < 0;
+                this.adjacentNucleotideIndices = new Array<number>();
+                this.adjacentNucleotideIndices.push(nucleotideIndex);
+                if (basePairIndex >= 0) {
+                    this.adjacentNucleotideIndices.push(basePairIndex);
+                    return true;
+                }
+                this.adjacentNucleotideIndex0 = nucleotideIndex - 1;
+                this.adjacentNucleotideIndex1 = nucleotideIndex + 1;
+                for (;; this.adjacentNucleotideIndex0--) {
+                    if (this.adjacentNucleotideIndex0 < 0) {
+                        return false;
+                    }
+                    if (nucleotides[this.adjacentNucleotideIndex0].basePairIndex >= 0) {
+                        break;
+                    }
+                    this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
+                }
+                for (;; this.adjacentNucleotideIndex1++) {
+                    if (this.adjacentNucleotideIndex1 >= nucleotides.length) {
+                        return false;
+                    }
+                    if (nucleotides[this.adjacentNucleotideIndex1].basePairIndex >= 0) {
+                        break;
+                    }
+                    this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                }
+                return nucleotides[this.adjacentNucleotideIndex0].basePairIndex == this.adjacentNucleotideIndex1;
             }
             getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
-                return [nucleotideIndex];
+                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
+                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                return this.adjacentNucleotideIndices;
             }
-        }('', ''),
-        // 'RNA Sub-domain' : null,
-        // 'RNA Cycle' : null,
-        // 'RNA List Nucs' : null,
-        // 'RNA Strand' : null,
-        // 'RNA Color Unit' : null,
-        // 'RNA Named Group' : null,
-        // 'RNA Strand Group' : null,
-        // 'Labels Only' : null,
-        // 'Entire Scene' : null
+        }('a nucleotide within a stacked helix', 'a nucleotide with proximate nucleotides on either side exclusively bonded to the other'),
+        // 'RNA Sub-domain' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'RNA Cycle' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'RNA List Nucs' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'RNA Strand' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'RNA Color Unit' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'RNA Named Group' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'RNA Strand Group' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'Labels Only' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
+        // 'Entire Scene' : new class extends SelectionConstraint{
+        //     approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                
+        //     }
+        //     getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                
+        //     }
+        // }('', ''),
     };
 
     private static sceneBounds = {
