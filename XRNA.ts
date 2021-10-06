@@ -968,40 +968,74 @@ export class XRNA {
                 condition = nucleotide.basePairIndex >= 0;
                 populateAdjacentNucleotideIndicesHelper = () => {
                     adjacentNucleotideIndices.push(nucleotideIndex);
-                    adjacentNucleotideIndices.push(nucleotides[nucleotideIndex].basePairIndex);
-                    let adjacentNucleotideIndex = nucleotideIndex - 1;
-                    let lastBasePairIndex = -1;
-                    for (; adjacentNucleotideIndex >= 0 && nucleotides[adjacentNucleotideIndex].basePairIndex >= 0; adjacentNucleotideIndex--) {
-                        lastBasePairIndex = nucleotides[adjacentNucleotideIndex].basePairIndex;
-                        adjacentNucleotideIndices.push(adjacentNucleotideIndex);
-                        adjacentNucleotideIndices.push(lastBasePairIndex);
+                    let basePairIndex = nucleotides[nucleotideIndex].basePairIndex;
+                    adjacentNucleotideIndices.push(basePairIndex);
+                    if (Math.abs(nucleotideIndex - basePairIndex) == 1) {
+                        return;
                     }
-                    let singleStrandNucleotideIndices = new Array<number>();
-                    for (; adjacentNucleotideIndex >= 0; adjacentNucleotideIndex--) {
-                        if (nucleotides[adjacentNucleotideIndex].basePairIndex >= 0) {
-                            if (adjacentNucleotideIndex == lastBasePairIndex) {
-                                adjacentNucleotideIndices = adjacentNucleotideIndices.concat(singleStrandNucleotideIndices);
+                    let adjacentNucleotideIndex = nucleotideIndex + 1;
+                    let adjacentBasePairIndex = basePairIndex - 1;
+                    for (; adjacentNucleotideIndex < nucleotides.length && adjacentBasePairIndex >= 0; adjacentNucleotideIndex++, adjacentBasePairIndex--) {
+                        let basePairIndexOfAdjacentNucleotide = nucleotides[adjacentNucleotideIndex].basePairIndex;
+                        if (basePairIndexOfAdjacentNucleotide < 0) {
+                            // The base-pair series has ended.
+                            // Check the intermediate single strand for inclusion.
+                            if (adjacentNucleotideIndex < adjacentBasePairIndex) {
+                                let intermediateIndices = new Array<number>();
+                                let includeIntermediateIndicesFlag : boolean;
+                                // Upon encountering a base pair, set addIntermediateIndicesFlag to false.
+                                // Checking the single-strandedness of adjacentBasePairIndex must be included because of the for-loop's decrementing it.
+                                for (; adjacentNucleotideIndex <= adjacentBasePairIndex && (includeIntermediateIndicesFlag = nucleotides[adjacentNucleotideIndex].basePairIndex < 0); adjacentNucleotideIndex++) {
+                                    intermediateIndices.push(adjacentNucleotideIndex);
+                                }
+                                if (includeIntermediateIndicesFlag) {
+                                    adjacentNucleotideIndices = adjacentNucleotideIndices.concat(intermediateIndices);
+                                }
                             }
                             break;
                         }
-                        singleStrandNucleotideIndices.push(adjacentNucleotideIndex);
-                    }
-                    adjacentNucleotideIndex = nucleotideIndex + 1;
-                    lastBasePairIndex = -1;
-                    for (; adjacentNucleotideIndex < nucleotides.length && nucleotides[adjacentNucleotideIndex].basePairIndex >= 0; adjacentNucleotideIndex++) {
-                        lastBasePairIndex = nucleotides[adjacentNucleotideIndex].basePairIndex;
+                        if (basePairIndexOfAdjacentNucleotide != adjacentBasePairIndex) {
+                            // The base-pair series has diverged.
+                            break;
+                        }
                         adjacentNucleotideIndices.push(adjacentNucleotideIndex);
-                        adjacentNucleotideIndices.push(lastBasePairIndex);
+                        adjacentNucleotideIndices.push(adjacentBasePairIndex);
+                        if (adjacentNucleotideIndex == adjacentBasePairIndex - 2) {
+                            // Avoid duplicating the selection of nucleotides.
+                            break;
+                        }
                     }
-                    singleStrandNucleotideIndices = new Array<number>();
-                    for (; adjacentNucleotideIndex < nucleotides.length; adjacentNucleotideIndex++) {
-                        if (nucleotides[adjacentNucleotideIndex].basePairIndex >= 0) {
-                            if (adjacentNucleotideIndex == lastBasePairIndex) {
-                                adjacentNucleotideIndices = adjacentNucleotideIndices.concat(singleStrandNucleotideIndices);
+                    adjacentNucleotideIndex = nucleotideIndex - 1;
+                    adjacentBasePairIndex = basePairIndex + 1;
+                    for (; adjacentNucleotideIndex >= 0 && adjacentBasePairIndex < nucleotides.length; adjacentNucleotideIndex--, adjacentBasePairIndex++) {
+                        let basePairIndexOfAdjacentNucleotide = nucleotides[adjacentNucleotideIndex].basePairIndex;
+                        if (basePairIndexOfAdjacentNucleotide < 0) {
+                            // The base-pair series has ended.
+                            // Check the intermediate single strand for inclusion.
+                            if (adjacentNucleotideIndex > adjacentBasePairIndex) {
+                                let intermediateIndices = new Array<number>();
+                                let includeIntermediateIndicesFlag : boolean;
+                                // Upon encountering a base pair, set  addIntermediateIndicesFlag to false.
+                                // Checking the single-strandedness of adjacentBasePairIndex must be included because of the for-loop's decrementing it.
+                                for (; adjacentNucleotideIndex >= adjacentBasePairIndex && (includeIntermediateIndicesFlag = nucleotides[adjacentNucleotideIndex].basePairIndex < 0); adjacentNucleotideIndex--) {
+                                    intermediateIndices.push(adjacentNucleotideIndex);
+                                }
+                                if (includeIntermediateIndicesFlag) {
+                                    adjacentNucleotideIndices = adjacentNucleotideIndices.concat(intermediateIndices);
+                                }
                             }
                             break;
                         }
-                        singleStrandNucleotideIndices.push(adjacentNucleotideIndex);
+                        if (basePairIndexOfAdjacentNucleotide != adjacentBasePairIndex) {
+                            // The base-pair series has diverged.
+                            break;
+                        }
+                        adjacentNucleotideIndices.push(adjacentNucleotideIndex);
+                        adjacentNucleotideIndices.push(adjacentBasePairIndex);
+                        if (adjacentNucleotideIndex == adjacentBasePairIndex + 2) {
+                            // Avoid duplicating the selection of nucleotides.
+                            break;
+                        }
                     }
                 };
                 break;
