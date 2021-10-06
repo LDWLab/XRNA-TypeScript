@@ -275,10 +275,17 @@ export class XRNA {
                 this.adjacentNucleotideIndices.push(nucleotideIndex);
                 if (basePairIndex >= 0) {
                     this.adjacentNucleotideIndices.push(basePairIndex);
+                    this.adjacentNucleotideIndex0 = nucleotideIndex;
+                    this.adjacentNucleotideIndex1 = basePairIndex;
+                    // In this case, we must complement the action of getAdjacentNucleotideIndices().
+                    this.getAdjacentNucleotideIndicesHelper(nucleotides, () => this.adjacentNucleotideIndex0++, () => this.adjacentNucleotideIndex1--, () => this.adjacentNucleotideIndex0 >= nucleotides.length || this.adjacentNucleotideIndex1 < 0);
+                    this.adjacentNucleotideIndex0 = nucleotideIndex;
+                    this.adjacentNucleotideIndex1 = basePairIndex;
                     return true;
                 }
                 this.adjacentNucleotideIndex0 = nucleotideIndex - 1;
                 this.adjacentNucleotideIndex1 = nucleotideIndex + 1;
+                // Locate the nearest base-paired nucleotide index < nucleotideIndex
                 for (;; this.adjacentNucleotideIndex0--) {
                     if (this.adjacentNucleotideIndex0 < 0) {
                         return false;
@@ -288,6 +295,7 @@ export class XRNA {
                     }
                     this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
                 }
+                // Locate the nearest base-paired nucleotide index > nucleotideIndex
                 for (;; this.adjacentNucleotideIndex1++) {
                     if (this.adjacentNucleotideIndex1 >= nucleotides.length) {
                         return false;
@@ -297,12 +305,60 @@ export class XRNA {
                     }
                     this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
                 }
+                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
+                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                // Check whether the nearest base-paired nucleotides are base-paired together.
                 return nucleotides[this.adjacentNucleotideIndex0].basePairIndex == this.adjacentNucleotideIndex1;
             }
             getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
-                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
-                this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                this.getAdjacentNucleotideIndicesHelper(nucleotides, () => this.adjacentNucleotideIndex0--, () => this.adjacentNucleotideIndex1++, () => this.adjacentNucleotideIndex0 < 0 || this.adjacentNucleotideIndex1 >= nucleotides.length);
                 return this.adjacentNucleotideIndices;
+            }
+            getAdjacentNucleotideIndicesHelper(nucleotides : Array<Nucleotide>, adjacentNucleotideIndex0Incrementer : () => void, adjacentNucleotideIndex1Incrementer : () => void, adjacentNucleotideIndicesAreOutsideBoundsChecker : () => boolean) : void {
+                let intermediateIndices = new Array<number>();
+                for (;;) {
+                    if (Math.abs(this.adjacentNucleotideIndex0 - this.adjacentNucleotideIndex1) < 2) {
+                        this.adjacentNucleotideIndices = this.adjacentNucleotideIndices.concat(intermediateIndices);
+                        // Avoid duplicating selected elements.
+                        break;
+                    }
+                    let cacheNucleotideIndex0 = this.adjacentNucleotideIndex0;
+                    let cacheNucleotideIndex1 = this.adjacentNucleotideIndex1;
+                    adjacentNucleotideIndex0Incrementer();
+                    adjacentNucleotideIndex1Incrementer();
+                    if (adjacentNucleotideIndicesAreOutsideBoundsChecker()) {
+                        break;
+                    }
+                    let adjacentNucleotideIndex0BasePair = nucleotides[this.adjacentNucleotideIndex0].basePairIndex;
+                    let adjacentNucleotideIndex1BasePair = nucleotides[this.adjacentNucleotideIndex1].basePairIndex;
+                    let adjacentNucleotideIndex0HasBasePair = adjacentNucleotideIndex0BasePair >= 0;
+                    let adjacentNucleotideIndex1HasBasePair = adjacentNucleotideIndex1BasePair >= 0;
+                    if (adjacentNucleotideIndex0HasBasePair && adjacentNucleotideIndex1HasBasePair) {
+                        if (adjacentNucleotideIndex0BasePair == this.adjacentNucleotideIndex1) {
+                            // The probe nucleotides are bonded to one another.
+                            this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex0);
+                            this.adjacentNucleotideIndices.push(this.adjacentNucleotideIndex1);
+                            // Include the intermediate nucleotides (those between bonded-together probe nucleotides).
+                            this.adjacentNucleotideIndices = this.adjacentNucleotideIndices.concat(intermediateIndices);
+                            intermediateIndices = new Array<number>();
+                        } else {
+                            // The probe nucleotides have diverged (they are no longer exclusively bonded to one another).
+                            break;
+                        }
+                    } else if (adjacentNucleotideIndex0HasBasePair) {
+                        // Stall adjacentNucleotideIndex0 until adjacentNucleotideIndex1 has a base pair.
+                        this.adjacentNucleotideIndex0 = cacheNucleotideIndex0;
+                        intermediateIndices.push(this.adjacentNucleotideIndex1);
+                    } else if (adjacentNucleotideIndex1HasBasePair) {
+                        // Stall adjacentNucleotideIndex1 until adjacentNucleotideIndex0 has a base pair.
+                        this.adjacentNucleotideIndex1 = cacheNucleotideIndex1;
+                        intermediateIndices.push(this.adjacentNucleotideIndex0);
+                    } else {
+                        // Neither nucleotide has a base pair (they are in single strands).
+                        intermediateIndices.push(this.adjacentNucleotideIndex0);
+                        intermediateIndices.push(this.adjacentNucleotideIndex1);
+                    }
+                }
             }
         }('a nucleotide within a stacked helix', 'a nucleotide with proximate nucleotides on either side exclusively bonded to the other'),
         // 'RNA Sub-domain' : new class extends SelectionConstraint{
