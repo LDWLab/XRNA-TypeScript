@@ -108,7 +108,7 @@ abstract class SelectionConstraint {
 
     abstract approveSelection(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : boolean;
 
-    abstract populateAdjacentNucleotideIndices(adjacentNucleotideIndices: Array<number>, nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : void;
+    abstract getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number>;
 }
 
 const svgNameSpaceURL = 'http://www.w3.org/2000/svg';
@@ -158,15 +158,16 @@ export class XRNA {
             approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
                 return basePairIndex < 0;
             }
-            populateAdjacentNucleotideIndices(adjacentNucleotideIndices: Array<number>, nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : void {
-                adjacentNucleotideIndices.push(nucleotideIndex);
+            getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                return [nucleotideIndex];
             }
         }('a nucleotide without a base pair', 'a non-base-paired nucleotide'),
         'RNA Single Strand' : new class extends SelectionConstraint {
             approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
                 return basePairIndex < 0;
             }
-            populateAdjacentNucleotideIndices(adjacentNucleotideIndices: Array<number>, nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : void {
+            getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                let adjacentNucleotideIndices = new Array<number>();
                 for (let adjacentNucleotideIndex = nucleotideIndex - 1; adjacentNucleotideIndex >= 0 && nucleotides[adjacentNucleotideIndex].basePairIndex < 0; adjacentNucleotideIndex--) {
                     adjacentNucleotideIndices.push(adjacentNucleotideIndex);
                 }
@@ -174,6 +175,7 @@ export class XRNA {
                 for (let adjacentNucleotideIndex = nucleotideIndex + 1; adjacentNucleotideIndex < nucleotides.length && nucleotides[adjacentNucleotideIndex].basePairIndex < 0; adjacentNucleotideIndex++) {
                     adjacentNucleotideIndices.push(adjacentNucleotideIndex);
                 }
+                return adjacentNucleotideIndices;
             }
         }('a nucleotide without a base pair', 'a non-base-paired nucleotide'),
         'RNA Single Base Pair' : new class extends SelectionConstraint{
@@ -181,20 +183,20 @@ export class XRNA {
                 // Special case: base-paired immediately adjacent nucleotides.
                 return basePairIndex >= 0 && (Math.abs(nucleotideIndex - basePairIndex) == 1 || ((nucleotideIndex == 0 || nucleotides[nucleotideIndex - 1].basePairIndex != basePairIndex + 1) && (nucleotideIndex == nucleotides.length - 1 || nucleotides[nucleotideIndex + 1].basePairIndex != basePairIndex - 1)));
             }
-            populateAdjacentNucleotideIndices(adjacentNucleotideIndices: Array<number>, nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : void {
-                adjacentNucleotideIndices.push(nucleotideIndex);
-                adjacentNucleotideIndices.push(basePairIndex);
+            getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                return [nucleotideIndex, basePairIndex];
             }
         }('a nucleotide with a base pair and no contiguous base pairs', 'a base-paired nucleotide outside a series of base pairs'),
         'RNA Helix' : new class extends SelectionConstraint{
             approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
                 return basePairIndex >= 0;
             }
-            populateAdjacentNucleotideIndices(adjacentNucleotideIndices : Array<number>, nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex) : void {
+            getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex) : Array<number> {
+                let adjacentNucleotideIndices = new Array<number>();
                 adjacentNucleotideIndices.push(nucleotideIndex);
                 adjacentNucleotideIndices.push(basePairIndex);
                 if (Math.abs(nucleotideIndex - basePairIndex) == 1) {
-                    return;
+                    return adjacentNucleotideIndices;
                 }
                 let adjacentNucleotideIndex = nucleotideIndex + 1;
                 let adjacentBasePairIndex = basePairIndex - 1;
@@ -259,19 +261,27 @@ export class XRNA {
                         // Avoid duplicating the selection of nucleotides.
                         break;
                     }
-                }                
+                }
+                return adjacentNucleotideIndices;
             }
         }('a nucleotide with a base pair', 'a base-paired nucleotide'),
-        'RNA Stacked Helix' : null,
-        'RNA Sub-domain' : null,
-        'RNA Cycle' : null,
-        'RNA List Nucs' : null,
-        'RNA Strand' : null,
-        'RNA Color Unit' : null,
-        'RNA Named Group' : null,
-        'RNA Strand Group' : null,
-        'Labels Only' : null,
-        'Entire Scene' : null
+        'RNA Stacked Helix' : new class extends SelectionConstraint{
+            approveSelection(nucleotides : Nucleotide[], nucleotideIndex : number, basePairIndex : number) : boolean {
+                return basePairIndex < 0;
+            }
+            getAdjacentNucleotideIndices(nucleotides : Array<Nucleotide>, nucleotideIndex : number, basePairIndex : number) : Array<number> {
+                return [nucleotideIndex];
+            }
+        }('', ''),
+        // 'RNA Sub-domain' : null,
+        // 'RNA Cycle' : null,
+        // 'RNA List Nucs' : null,
+        // 'RNA Strand' : null,
+        // 'RNA Color Unit' : null,
+        // 'RNA Named Group' : null,
+        // 'RNA Strand Group' : null,
+        // 'Labels Only' : null,
+        // 'Entire Scene' : null
     };
 
     private static sceneBounds = {
@@ -1014,11 +1024,13 @@ export class XRNA {
     }
 
     public static onClickNucleotide(nucleotideHTML : HTMLElement) : void {
+        // Clear the previous selection
         XRNA.selection.boundingBoxHTMLs.forEach(boundingBoxHTML => {
             boundingBoxHTML.setAttribute('stroke', 'none');
         });
         XRNA.selection.boundingBoxHTMLs = new Array<HTMLElement>();
         XRNA.selection.nucleotides = new Array<Nucleotide>();
+
         let indices = /^.*#(\d+).*#(\d+).*$/g.exec(nucleotideHTML.id);
         let rnaMoleculeIndex = parseInt(indices[1]);
         let nucleotideIndex = parseInt(indices[2])
@@ -1027,10 +1039,8 @@ export class XRNA {
         let selectionConstraintDescription = XRNA.selectionConstraintHTML.value;
         let selectionConstraint = XRNA.selectionConstraintDescriptionDictionary[selectionConstraintDescription];
         if (selectionConstraint.approveSelection(nucleotides, nucleotideIndex, basePairIndex)) {
-            let adjacentNucleotideIndices = new Array<number>();
-            selectionConstraint.populateAdjacentNucleotideIndices(adjacentNucleotideIndices, nucleotides, nucleotideIndex, basePairIndex);
             let rnaMoleculeID = XRNA.rnaMoleculeID(rnaMoleculeIndex);
-            adjacentNucleotideIndices.forEach(adjacentNucleotideIndex => {
+            selectionConstraint.getAdjacentNucleotideIndices(nucleotides, nucleotideIndex, basePairIndex).forEach(adjacentNucleotideIndex => {
                 XRNA.selection.boundingBoxHTMLs.push(document.getElementById(XRNA.boundingBoxID(XRNA.nucleotideID(rnaMoleculeID, adjacentNucleotideIndex))));
                 XRNA.selection.nucleotides.push(nucleotides[adjacentNucleotideIndex]);
             });
@@ -1039,7 +1049,7 @@ export class XRNA {
                 XRNA.selection.boundingBoxHTMLs.push(boundingBoxHTML);
             });
         } else {
-            XRNA.alertBrokenSelectionConstraint(selectionConstraintDescription, XRNA.selectionConstraintDescriptionDictionary[selectionConstraintDescription]);
+            XRNA.alertBrokenSelectionConstraint(selectionConstraintDescription, selectionConstraint);
         }
     }
 
