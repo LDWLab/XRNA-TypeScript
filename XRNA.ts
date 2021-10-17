@@ -27,6 +27,25 @@ interface VoidFunction<T> {
     (t : T) : void;
 }
 
+type Color = {
+    red : number,
+    green : number,
+    blue : number
+};
+
+type LineLabel = {
+    v0 : {
+        x : number,
+        y : number
+    },
+    v1 : {
+        x : number,
+        y : number
+    },
+    strokeWidth : number,
+    color : Color
+};
+
 class Nucleotide {
     public parent : RNAMolecule;
     // The nucleotide symbol (A|C|G|U)
@@ -37,18 +56,16 @@ class Nucleotide {
     public y : number;
     // The index of the base-paired Nucleotide within the parent RNAMolecule's Nucleotide[]
     public basePairIndex : number;
-    // [x0, y0, x1, y1, stroke-width, [r, g, b]]
-    public labelLine : [number, number, number, number, number, [number, number, number]];
-    // [x, y, content, [font-size, font-family, font-style, font-weight], [r, g, b]]
-    public labelContent : [number, number, string, [number, string, string, string], [number, number, number]];
+    public labelLine : LineLabel;
+    public labelContent : [number, number, string, [number, string, string, string], Color];
     // [font-size, font-family, font-style, font-weight]
     public font : [number, string, string, string];
     // [r, g, b]
-    public color : [number, number, number];
+    public color : Color;
     // The html template for nucleotide data (specified within input XML files' DtD header element)
     public static template : string;
 
-    public constructor(parent : RNAMolecule, symbol : string, font : [number, string, string, string], x : number = 0.0, y : number = 0.0, basePairIndex = -1, labelLine = <[number, number, number, number, number, [number, number, number]]>null, labelContent = <[number, number, string, [number, string, string, string], [number, number, number]]>null, color : [number, number, number] = [0, 0, 0]) {
+    public constructor(parent : RNAMolecule, symbol : string, font : [number, string, string, string], x : number = 0.0, y : number = 0.0, basePairIndex = -1, labelLine = null, labelContent = <[number, number, string, [number, string, string, string], Color]>null, color = {red: 0, green: 0, blue: 0}) {
         this.symbol = symbol.toUpperCase();
         if (!this.symbol.match(/^[ACGU]$/)) {
             throw new Error('The input nucleotide symbol is an invalid: ' + symbol + ' is not one of {A, C, G, U}.');
@@ -58,10 +75,10 @@ class Nucleotide {
         this.basePairIndex = basePairIndex;
         this.labelLine = labelLine;
         if (labelLine) {
-            this.labelLine[0] += x;
-            this.labelLine[1] += y;
-            this.labelLine[2] += x;
-            this.labelLine[3] += y;
+            this.labelLine.v0.x += x;
+            this.labelLine.v0.y += y;
+            this.labelLine.v1.x += x;
+            this.labelLine.v1.y += y;
         }
         this.labelContent = labelContent;
         if (labelContent) {
@@ -139,6 +156,12 @@ abstract class SelectionConstraint {
 
 const svgNameSpaceURL = 'http://www.w3.org/2000/svg';
 
+type SelectedIndicesTuple = {
+    rnaComplexIndex: number,
+    rnaMoleculeIndex: number,
+    nucleotideIndex: number
+};
+
 export class XRNA {
     private static rnaComplexes : Array<RNAComplex>;
 
@@ -182,7 +205,7 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex].basePairIndex < 0;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex: number; rnaMoleculeIndex: number; nucleotideIndex: number;}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 return [{
                     rnaComplexIndex : rnaComplexIndex,
                     rnaMoleculeIndex : rnaMoleculeIndex,
@@ -197,7 +220,7 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex].basePairIndex < 0;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex: number; rnaMoleculeIndex: number; nucleotideIndex: number;}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 let
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
                     adjacentNucleotideIndices = new Array<{ rnaComplexIndex: number; rnaMoleculeIndex: number; nucleotideIndex: number; }>();
@@ -234,7 +257,7 @@ export class XRNA {
                 // Special case: base-paired immediately adjacent nucleotides.
                 return basePairIndex >= 0 && (Math.abs(nucleotideIndex - basePairIndex) == 1 || ((nucleotideIndex == 0 || nucleotides[nucleotideIndex - 1].basePairIndex != basePairIndex + 1) && (nucleotideIndex == nucleotides.length - 1 || nucleotides[nucleotideIndex + 1].basePairIndex != basePairIndex - 1)));
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 return [{rnaComplexIndex : rnaComplexIndex, rnaMoleculeIndex : rnaMoleculeIndex, nucleotideIndex : nucleotideIndex}, {rnaComplexIndex : rnaComplexIndex, rnaMoleculeIndex : rnaMoleculeIndex, nucleotideIndex : XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex].basePairIndex}];
             }
             getErrorMessage() : string {
@@ -245,9 +268,9 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex].basePairIndex >= 0;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 let
-                    helixIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                    helixIndices = new Array<SelectedIndicesTuple>(),
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
                     basePairIndex = nucleotides[nucleotideIndex].basePairIndex;
                 helixIndices.push({rnaComplexIndex : rnaComplexIndex, rnaMoleculeIndex : rnaMoleculeIndex, nucleotideIndex : nucleotideIndex});
@@ -266,7 +289,7 @@ export class XRNA {
                         // Check the intermediate single strand for inclusion.
                         if (adjacentNucleotideIndex < adjacentBasePairIndex) {
                             let
-                                intermediateIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                                intermediateIndices = new Array<SelectedIndicesTuple>(),
                                 includeIntermediateIndicesFlag : boolean;
                             // Upon encountering a base pair, set addIntermediateIndicesFlag to false.
                             // Checking the single-strandedness of adjacentBasePairIndex must be included because of the for-loop's decrementing it.
@@ -300,7 +323,7 @@ export class XRNA {
                         // Check the intermediate single strand for inclusion.
                         if (adjacentNucleotideIndex > adjacentBasePairIndex) {
                             let
-                                intermediateIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                                intermediateIndices = new Array<SelectedIndicesTuple>(),
                                 includeIntermediateIndicesFlag : boolean;
                             // Upon encountering a base pair, set  addIntermediateIndicesFlag to false.
                             // Checking the single-strandedness of adjacentBasePairIndex must be included because of the for-loop's decrementing it.
@@ -331,12 +354,12 @@ export class XRNA {
             }
         },
         'RNA Stacked Helix' : new class extends SelectionConstraint{
-            adjacentNucleotideIndices : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>;
+            adjacentNucleotideIndices : Array<SelectedIndicesTuple>;
             adjacentNucleotideIndex0 : number;
             adjacentNucleotideIndex1 : number;
 
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
-                this.adjacentNucleotideIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>();
+                this.adjacentNucleotideIndices = new Array<SelectedIndicesTuple>();
                 this.adjacentNucleotideIndices.push({rnaComplexIndex : rnaComplexIndex, rnaMoleculeIndex : rnaMoleculeIndex, nucleotideIndex});
                 let
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
@@ -378,14 +401,14 @@ export class XRNA {
                 // Check whether the nearest base-paired nucleotides are base-paired together.
                 return nucleotides[this.adjacentNucleotideIndex0].basePairIndex == this.adjacentNucleotideIndex1;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 this.getSelectedNucleotideIndicesHelper(rnaComplexIndex, rnaMoleculeIndex, () => this.adjacentNucleotideIndex0--, () => this.adjacentNucleotideIndex1++, nucleotides => this.adjacentNucleotideIndex0 < 0 || this.adjacentNucleotideIndex1 >= nucleotides.length);
                 return this.adjacentNucleotideIndices;
             }
             getSelectedNucleotideIndicesHelper(rnaComplexIndex : number, rnaMoleculeIndex : number, adjacentNucleotideIndex0Incrementer : () => void, adjacentNucleotideIndex1Incrementer : () => void, adjacentNucleotideIndicesAreOutsideBoundsChecker : (nucleotides : Nucleotide[]) => boolean) : void {
                 let
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
-                    intermediateIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>();
+                    intermediateIndices = new Array<SelectedIndicesTuple>();
                 for (;;) {
                     if (Math.abs(this.adjacentNucleotideIndex0 - this.adjacentNucleotideIndex1) < 2) {
                         this.adjacentNucleotideIndices = this.adjacentNucleotideIndices.concat(intermediateIndices);
@@ -418,7 +441,7 @@ export class XRNA {
                             });
                             // Include the intermediate nucleotides (those between bonded-together probe nucleotides).
                             this.adjacentNucleotideIndices = this.adjacentNucleotideIndices.concat(intermediateIndices);
-                            intermediateIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>();
+                            intermediateIndices = new Array<SelectedIndicesTuple>();
                         } else {
                             // The probe nucleotides have diverged (they are no longer exclusively bonded to one another).
                             break;
@@ -458,9 +481,9 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex].basePairIndex >= 0;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 let
-                    adjacentNucleotideIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                    adjacentNucleotideIndices = new Array<SelectedIndicesTuple>(),
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
                     basePairIndex = nucleotides[nucleotideIndex].basePairIndex;
                 adjacentNucleotideIndices.push({
@@ -508,9 +531,9 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return true;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 let
-                    cycleIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                    cycleIndices = new Array<SelectedIndicesTuple>(),
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
                     lowerAdjacentNucleotideIndex : number,
                     upperAdjacentNucleotideIndex : number;
@@ -611,7 +634,7 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return false;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 throw new Error("This code should be unreachable.");
             }
             getErrorMessage() : string {
@@ -623,9 +646,9 @@ export class XRNA {
                 return true;
             }
             getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : 
-            Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            Array<SelectedIndicesTuple> {
                 let
-                    adjacentNucleotideIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                    adjacentNucleotideIndices = new Array<SelectedIndicesTuple>(),
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaComplexIndex].nucleotides;
                 for (let adjacentNucleotideIndex = 0; adjacentNucleotideIndex < nucleotides.length; adjacentNucleotideIndex++) {
                     adjacentNucleotideIndices.push({rnaComplexIndex : rnaComplexIndex, rnaMoleculeIndex : rnaMoleculeIndex, nucleotideIndex : adjacentNucleotideIndex});
@@ -640,15 +663,15 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return true;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 let
                     nucleotides = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides,
                     color = nucleotides[nucleotideIndex].color,
-                    adjacentNucleotideIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>();
+                    adjacentNucleotideIndices = new Array<SelectedIndicesTuple>();
                 for (let adjacentNucleotideIndex = 0; adjacentNucleotideIndex < nucleotides.length; adjacentNucleotideIndex++) {
                     let
                         adjacentNucleotideColor = nucleotides[adjacentNucleotideIndex].color;
-                    if (adjacentNucleotideColor[0] == color[0] && adjacentNucleotideColor[1] == color[1] && adjacentNucleotideColor[2] == color[2]) {
+                    if (adjacentNucleotideColor.red == color.red && adjacentNucleotideColor.green == color.green && adjacentNucleotideColor.blue == color.blue) {
                         adjacentNucleotideIndices.push({rnaComplexIndex : rnaComplexIndex, rnaMoleculeIndex : rnaMoleculeIndex, nucleotideIndex : adjacentNucleotideIndex});
                     }
                 }
@@ -663,7 +686,7 @@ export class XRNA {
                 // For now, named-group support is not implemented.
                 return false;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 throw new Error("This code should be unreachable.");
             }
             getErrorMessage() : string {
@@ -674,9 +697,9 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return true;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 let
-                    strandNucleotideIndices = new Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}>(),
+                    strandNucleotideIndices = new Array<SelectedIndicesTuple>(),
                     rnaComplex = XRNA.rnaComplexes[rnaComplexIndex];
                 for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < rnaComplex.rnaMolecules.length; rnaMoleculeIndex++) {
                     let
@@ -695,7 +718,7 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return true;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 // Select no nucleotides, but do not produce an error.
                 // This replicates XRNA-GT behavior.
                 return [];   
@@ -708,7 +731,7 @@ export class XRNA {
             approveSelectedIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean {
                 return true;
             }
-            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<{rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number}> {
+            getSelectedNucleotideIndices(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : Array<SelectedIndicesTuple> {
                 // Select no indices.
                 return [];
             }
@@ -734,7 +757,7 @@ export class XRNA {
 
     private static selection = {
         boundingBoxHTMLs : new Array<HTMLElement>(),
-        nucleotides : new Array<Nucleotide>(),
+        selected : new Array<{x : number, y : number}>(),
     };
 
     public static mainWithArgumentParsing(args = <string[]>[]) : void {
@@ -849,7 +872,7 @@ export class XRNA {
             boundingBoxHTML.setAttribute('stroke', 'none');
         });
         XRNA.selection.boundingBoxHTMLs = new Array<HTMLElement>();
-        XRNA.selection.nucleotides = new Array<Nucleotide>();
+        XRNA.selection.selected = new Array<{x : number, y : number}>();
     }
 
     public static resetView() : void {
@@ -935,7 +958,7 @@ export class XRNA {
         return blob;
     }
 
-    public static parseRGB(rgbAsString : string) : [number, number, number] {
+    public static parseRGB(rgbAsString : string) : Color {
         let
             rgbAsNumber = parseInt(rgbAsString),
             validColorFlag = true;
@@ -945,19 +968,27 @@ export class XRNA {
             validColorFlag = !isNaN(rgbAsNumber);
         }
         let
-            rgb : [number, number, number];
+            rgb : Color;
         if (validColorFlag) {
-            rgb = [(rgbAsNumber >> 16) & 0xFF, (rgbAsNumber >> 8) & 0xFF, rgbAsNumber & 0xFF];
+            rgb = {
+                red: (rgbAsNumber >> 16) & 0xFF,
+                green: (rgbAsNumber >> 8) & 0xFF,
+                blue:rgbAsNumber & 0xFF
+            };
         } else {
-            rgb = [0, 0, 0];
+            rgb = {
+                red: 0,
+                green: 0,
+                blue: 0
+            };
             console.error('Invalid color string: ' + rgbAsString + ' is an invalid color. Only hexadecimal or integer values are accepted.');
         }
         return rgb;
     }
 
     // Converts the input RGB values to a hexadecimal string 
-    public static compressRGB(rgb : [number, number, number]) : string {
-        return ((rgb[0] << 16) | (rgb[1] << 8) | (rgb[2])).toString(16);
+    public static compressRGB(rgb : Color) : string {
+        return ((rgb.red << 16) | (rgb.green << 8) | (rgb.blue)).toString(16);
     }
 
     public static clamp(minimum : number, value : number, maximum : number) : number {
@@ -1101,14 +1132,25 @@ export class XRNA {
                     innerHTML = innerHTML.replace(/\n$/, '');
                     let
                         innerHTMLLines = innerHTML.split('\n'),
-                        labelContent : [number, number, string, [number, string, string, string], [number, number, number]] = null,
-                        labelLine : [number, number, number, number, number, [number, number, number]] = null;
+                        labelContent : [number, number, string, [number, string, string, string], Color] = null,
+                        labelLine : LineLabel = null;
                     innerHTMLLines.forEach(innerHTMLLine => {
                         let
                             splitLineElements = innerHTMLLine.split(/\s+/);
                         switch (splitLineElements[0].toLowerCase()) {
                             case 'l': {
-                                labelLine = [parseFloat(splitLineElements[1]), parseFloat(splitLineElements[2]), parseFloat(splitLineElements[3]), parseFloat(splitLineElements[4]), parseFloat(splitLineElements[5]), XRNA.parseRGB(splitLineElements[6])];
+                                labelLine = {
+                                    v0: {
+                                        x: parseFloat(splitLineElements[1]),
+                                        y: parseFloat(splitLineElements[2])
+                                    },
+                                    v1 : {
+                                        x: parseFloat(splitLineElements[3]),
+                                        y: parseFloat(splitLineElements[4])
+                                    },
+                                    strokeWidth: parseFloat(splitLineElements[5]),
+                                    color: XRNA.parseRGB(splitLineElements[6])
+                                };
                                 break;
                             }
                             case 's': {
@@ -1210,7 +1252,7 @@ export class XRNA {
                             continue;
                         }
                         if (nucleotideIndex0 >= nucleotides.length) {
-                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex0 + " >= " + currentRNAMolecule[0].length);
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex0 + " >= " + currentRNAMolecule.nucleotides.length);
                             continue;
                         }
                         if (nucleotideIndex1 < 0) {
@@ -1218,7 +1260,7 @@ export class XRNA {
                             continue;
                         }
                         if (nucleotideIndex1 >= nucleotides.length) {
-                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex1 + " >= " + currentRNAMolecule[0].length);
+                            console.error("Out of bounds error in (<BasePairs nucID='" + (index + firstNucleotideIndex) + "' bpNucID='" + (basePairedIndex + firstNucleotideIndex) + "' length='" + length + "'>): " + nucleotideIndex1 + " >= " + currentRNAMolecule.nucleotides.length);
                             continue;
                         }
                         nucleotides[nucleotideIndex0].basePairIndex = nucleotideIndex1;
@@ -1326,7 +1368,7 @@ export class XRNA {
                             let
                                 line = nucleotide.labelLine,
                                 lineColor = line[5];
-                            nucLabelLists += 'l ' + line[0] + ' ' + line[1] + ' ' + line[2] + ' ' + line[3] + ' ' + line[4] + ' ' + XRNA.compressRGB(lineColor) + ' 0.0 0 0 0 0\n';
+                            nucLabelLists += 'l ' + line.v0.x + ' ' + line.v0.y + ' ' + line.v1.x + ' ' + line.v1.y + ' ' + line.strokeWidth + ' ' + XRNA.compressRGB(lineColor) + ' 0.0 0 0 0 0\n';
                         }
                         if (nucleotide.labelContent) {
                             let
@@ -1368,11 +1410,24 @@ export class XRNA {
         return canvas.outerHTML;
     }
 
-    private static getBoundingBox(htmlElement : SVGTextElement | SVGLineElement | HTMLElement) : DOMRect {
+    private static getBoundingBox(htmlElement : SVGTextElement | SVGLineElement | SVGPathElement | HTMLElement) : DOMRect {
         let
             boundingBox = htmlElement.getBoundingClientRect();
         boundingBox.y -= XRNA.canvasBounds.y;
         return boundingBox;
+    }
+
+    private static getBoundingBoxHTML(boundingBox : DOMRect, parentID : string) : SVGRectElement {
+        let
+            boundingBoxHTML = document.createElementNS(svgNameSpaceURL, 'rect');
+        boundingBoxHTML.setAttribute('id', XRNA.boundingBoxID(parentID));
+        boundingBoxHTML.setAttribute('x', '' + boundingBox.x);
+        boundingBoxHTML.setAttribute('y', '' + boundingBox.y);
+        boundingBoxHTML.setAttribute('width', '' + boundingBox.width);
+        boundingBoxHTML.setAttribute('height', '' + boundingBox.height);
+        boundingBoxHTML.setAttribute('stroke', 'none');
+        boundingBoxHTML.setAttribute('fill', 'none');
+        return boundingBoxHTML;
     }
 
     public static complexID(rnaComplexIndex : number) : string {
@@ -1391,8 +1446,16 @@ export class XRNA {
         return parentID + ': Label Content';
     }
 
-    public static labelLineID(parentID : string) : string {
+    public static labelLineBodyID(parentID : string) : string {
         return parentID + ': Label Line';
+    }
+
+    public static labelLineCap0ID(parentID : string) : string {
+        return parentID + ': Cap #0';
+    }
+
+    public static labelLineCap1ID(parentID : string) : string {
+        return parentID + ': Cap #1';
     }
 
     public static boundingBoxID(parentID : string) : string {
@@ -1420,11 +1483,16 @@ export class XRNA {
         return 'translate(0 ' + y + ') scale(1 -1) translate(0 ' + -y +')';
     }
 
+    public static magnitudeSquared(x : number, y : number) : number {
+        return x * x + y * y;
+    }
+
+    public static magnitude(x : number, y : number) : number {
+        return Math.sqrt(XRNA.magnitudeSquared(x, y));
+    }
+
     public static distanceSquared(x0 : number, y0 : number, x1 : number, y1 : number) : number {
-        let
-            dx = x1 - x0,
-            dy = y1 - y0;
-        return dx * dx + dy * dy;
+        return XRNA.magnitudeSquared(x1 - x0, y1 - y0);
     }
 
     public static distance(x0 : number, y0 : number, x1 : number, y1 : number) : number {
@@ -1555,7 +1623,7 @@ export class XRNA {
                     nucleotideIndex = adjacentNucleotideIndices.nucleotideIndex,
                     boundingBoxHTML = document.getElementById(XRNA.boundingBoxID(XRNA.nucleotideID(XRNA.rnaMoleculeID(XRNA.complexID(rnaComplexIndex), rnaMoleculeIndex), nucleotideIndex)));
                 XRNA.selection.boundingBoxHTMLs.push(boundingBoxHTML);
-                XRNA.selection.nucleotides.push(XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex]);
+                XRNA.selection.selected.push(XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex]);
                 boundingBoxHTML.setAttribute('stroke', 'red');
             });
         } else {
@@ -1621,7 +1689,7 @@ export class XRNA {
                     nucleotideHTML.setAttribute('y', '' + nucleotide.y);
                     let
                         nucleotideColor = nucleotide.color;
-                    nucleotideHTML.setAttribute('stroke', 'rgb(' + nucleotideColor[0] + ' ' + nucleotideColor[1] + ' ' + nucleotideColor[2] + ')');
+                    nucleotideHTML.setAttribute('stroke', 'rgb(' + nucleotideColor.red + ' ' + nucleotideColor.green + ' ' + nucleotideColor.blue + ')');
                     nucleotideHTML.setAttribute('font-size', '' + nucleotide.font[0]);
                     nucleotideHTML.setAttribute('font-family', nucleotide.font[1]);
                     nucleotideHTML.setAttribute('font-style', nucleotide.font[2]);
@@ -1647,67 +1715,100 @@ export class XRNA {
                         nucleotideBoundingBoxCenterY = nucleotideBoundingBox.y + nucleotideBoundingBox.height / 2.0;
                     if (nucleotide.labelLine) {
                         let
-                            lineHTML = document.createElementNS(svgNameSpaceURL, 'line');
-                        lineHTML.setAttribute('id', nucleotideID + ': Label Line #' + nucleotideIndex);
-                        let
+                            labelLineClickableBodyHTML = document.createElementNS(svgNameSpaceURL, 'path'),
+                            labelLineClickableCap0HTML = document.createElementNS(svgNameSpaceURL, 'path'),
+                            labelLineClickableCap1HTML = document.createElementNS(svgNameSpaceURL, 'path'),
                             labelLine = nucleotide.labelLine,
-                            labelLineID = XRNA.labelLineID(nucleotideID);
-                        lineHTML.setAttribute('id', '' + labelLineID);
-                        lineHTML.setAttribute('x1', '' + (nucleotideBoundingBoxCenterX + labelLine[0]));
-                        lineHTML.setAttribute('y1', '' + (nucleotideBoundingBoxCenterY + labelLine[1]));
-                        lineHTML.setAttribute('x2', '' + (nucleotideBoundingBoxCenterX + labelLine[2]));
-                        lineHTML.setAttribute('y2', '' + (nucleotideBoundingBoxCenterY + labelLine[3]));
-                        lineHTML.setAttribute('stroke-width', '' + labelLine[4]);
-                        lineHTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
-                        let
-                            lineColor = labelLine[5];
-                        lineHTML.setAttribute('stroke', 'rgb(' + lineColor[0] + ' ' + lineColor[1] + ' ' + lineColor[2] + ')');
-                        labelLinesGroupHTML.appendChild(lineHTML);
-                        let
-                            labelLineBoundingBox = XRNA.getBoundingBox(lineHTML),
-                            boundingBoxHTML = document.createElementNS(svgNameSpaceURL, 'rect');
-                        boundingBoxHTML.setAttribute('id', XRNA.boundingBoxID(labelLineID));
-                        boundingBoxHTML.setAttribute('x', '' + labelLineBoundingBox.x);
-                        boundingBoxHTML.setAttribute('y', '' + labelLineBoundingBox.y);
-                        boundingBoxHTML.setAttribute('width', '' + labelLineBoundingBox.width);
-                        boundingBoxHTML.setAttribute('height', '' + labelLineBoundingBox.height);
-                        boundingBoxHTML.setAttribute('stroke', 'none');
-                        boundingBoxHTML.setAttribute('fill', 'none');
-                        boundingBoxesHTML.appendChild(boundingBoxHTML);
+                            x0 = nucleotideBoundingBoxCenterX + labelLine.v0.x,
+                            y0 = nucleotideBoundingBoxCenterY + labelLine.v0.y,
+                            x1 = nucleotideBoundingBoxCenterX + labelLine.v1.x,
+                            y1 = nucleotideBoundingBoxCenterY + labelLine.v1.y,
+                            dx = x1 - x0,
+                            dy = y1 - y0,
+                            labelLineHTML = document.createElementNS(svgNameSpaceURL, 'line'),
+                            labelLineID = XRNA.labelLineBodyID(nucleotideID),
+                            lineColor = labelLine.color,
+                            interpolation0X = XRNA.linearlyInterpolate(x0, x1, 0.25),
+                            interpolation0Y = XRNA.linearlyInterpolate(y0, y1, 0.25),
+                            interpolation1X = XRNA.linearlyInterpolate(x0, x1, 0.75),
+                            interpolation1Y = XRNA.linearlyInterpolate(y0, y1, 0.75),
+                            clickableScalar = 0.2,
+                            interpolation0Translated0 = {x: interpolation0X - dy * clickableScalar, y: interpolation0Y + dx * clickableScalar},
+                            interpolation0Translated1 = {x: interpolation0X + dy * clickableScalar, y: interpolation0Y - dx * clickableScalar},
+                            interpolation1Translated0 = {x: interpolation1X - dy * clickableScalar, y: interpolation1Y + dx * clickableScalar},
+                            interpolation1Translated1 = {x: interpolation1X + dy * clickableScalar, y: interpolation1Y - dx * clickableScalar},
+                            labelLineBodyID = XRNA.labelLineBodyID(nucleotideID),
+                            labelLineCap0ID = XRNA.labelLineCap0ID(nucleotideID),
+                            labelLineCap1ID = XRNA.labelLineCap1ID(nucleotideID);
+                        labelLineClickableBodyHTML.setAttribute('d', 'M ' + interpolation0Translated0.x + ' ' + interpolation0Translated0.y + ' L ' + interpolation1Translated0.x + ' ' + interpolation1Translated0.y + ' L ' + interpolation1Translated1.x + ' ' + interpolation1Translated1.y + ' L ' + interpolation0Translated1.x + ' ' + interpolation0Translated1.y + ' z');
+                        labelLineClickableBodyHTML.setAttribute('id', '' + labelLineBodyID);
+                        labelLineClickableBodyHTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
+                        labelLineClickableBodyHTML.setAttribute('visibility', 'hidden');
+                        labelLineClickableBodyHTML.setAttribute('pointer-events', 'all');
+                        labelLinesGroupHTML.appendChild(labelLineClickableBodyHTML);
+
+                        labelLineClickableCap0HTML.setAttribute('d', 'M ' + interpolation0Translated1.x + ' ' + interpolation0Translated1.y + ' L ' + (x0 + dy * clickableScalar) + ' ' + (y0 - dx * clickableScalar) + ' a 0.5 0.5 0 0 0 ' + (-2 * dy * clickableScalar) + ' ' + (2 * dx * clickableScalar) + ' L ' + interpolation0Translated0.x + ' ' + interpolation0Translated0.y + ' z');
+                        labelLineClickableCap0HTML.setAttribute('id', '' + labelLineCap0ID);
+                        labelLineClickableCap0HTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
+                        labelLineClickableCap0HTML.setAttribute('visibility', 'hidden');
+                        labelLineClickableCap0HTML.setAttribute('pointer-events', 'all');
+                        labelLinesGroupHTML.appendChild(labelLineClickableCap0HTML);
+                        
+                        labelLineClickableCap1HTML.setAttribute('d', 'M ' + interpolation1Translated0.x + ' ' + interpolation1Translated0.y + ' L ' + (x1 - dy * clickableScalar) + ' ' + (y1 + dx * clickableScalar) + ' a 0.5 0.5 0 0 0 ' + (2 * dy * clickableScalar) + ' ' + (-2 * dx * clickableScalar) + ' L ' + interpolation1Translated1.x + ' ' + interpolation1Translated1.y + ' z');
+                        labelLineClickableCap1HTML.setAttribute('id', '' + labelLineCap1ID);
+                        labelLineClickableCap1HTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
+                        labelLineClickableCap1HTML.setAttribute('visibility', 'hidden');
+                        labelLineClickableCap1HTML.setAttribute('pointer-events', 'all');
+                        labelLinesGroupHTML.appendChild(labelLineClickableCap1HTML);
+
+                        boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(XRNA.getBoundingBox(labelLineClickableBodyHTML), labelLineBodyID));
+                        boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(XRNA.getBoundingBox(labelLineClickableCap0HTML), labelLineCap0ID));
+                        boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(XRNA.getBoundingBox(labelLineClickableCap1HTML), labelLineCap1ID));
+
+                        labelLineHTML.setAttribute('id', nucleotideID + ': Label Line #' + nucleotideIndex);
+                        labelLineHTML.setAttribute('id', '' + labelLineID);
+                        labelLineHTML.setAttribute('x1', '' + x0);
+                        labelLineHTML.setAttribute('y1', '' + y0);
+                        labelLineHTML.setAttribute('x2', '' + x1);
+                        labelLineHTML.setAttribute('y2', '' + y1);
+                        labelLineHTML.setAttribute('stroke-width', '' + labelLine[4]);
+                        labelLineHTML.setAttribute('stroke', 'rgb(' + lineColor.red + ' ' + lineColor.green + ' ' + lineColor.blue + ')');
+                        labelLineHTML.setAttribute('pointer-events', 'none');
+                        labelLinesGroupHTML.appendChild(labelLineHTML);
                     }
                     if (nucleotide.labelContent) {
                         let
-                            contentHTML = document.createElementNS(svgNameSpaceURL, 'text');
-                        contentHTML.setAttribute('id', XRNA.labelContentID(nucleotideID));
+                            labelContentHTML = document.createElementNS(svgNameSpaceURL, 'text');
+                        labelContentHTML.setAttribute('id', XRNA.labelContentID(nucleotideID));
                         let 
                             labelContent = nucleotide.labelContent,
                             x = nucleotideBoundingBoxCenterX + labelContent[0];
-                        contentHTML.setAttribute('x', '' + x);
+                        labelContentHTML.setAttribute('x', '' + x);
                         let
                             y = nucleotideBoundingBoxCenterY + labelContent[1];
-                        contentHTML.setAttribute('y', '' + y);
-                        contentHTML.textContent = labelContent[2];
+                        labelContentHTML.setAttribute('y', '' + y);
+                        labelContentHTML.textContent = labelContent[2];
                         let
                             labelColor = labelContent[4];
-                        contentHTML.setAttribute('stroke', 'rgb(' + labelColor[0] + ' ' + labelColor[1] + ' ' + labelColor[2] + ')');
+                        labelContentHTML.setAttribute('stroke', 'rgb(' + labelColor.red + ' ' + labelColor.green + ' ' + labelColor.blue + ')');
                         let
                             labelFont = labelContent[3],
                             labelID = XRNA.labelContentID(nucleotideID);
-                        contentHTML.setAttribute('id', labelID);
-                        contentHTML.setAttribute('font-size', '' + labelFont[0]);
-                        contentHTML.setAttribute('font-family', labelFont[1]);
-                        contentHTML.setAttribute('font-style', labelFont[2]);
-                        contentHTML.setAttribute('font-weight', labelFont[3]);
-                        contentHTML.setAttribute('transform', XRNA.invertYTransform(y));
-                        contentHTML.setAttribute('onclick', 'XRNA.onClickLabel(this)');
-                        labelContentsGroupHTML.appendChild(contentHTML);
+                        labelContentHTML.setAttribute('id', labelID);
+                        labelContentHTML.setAttribute('font-size', '' + labelFont[0]);
+                        labelContentHTML.setAttribute('font-family', labelFont[1]);
+                        labelContentHTML.setAttribute('font-style', labelFont[2]);
+                        labelContentHTML.setAttribute('font-weight', labelFont[3]);
+                        labelContentHTML.setAttribute('transform', XRNA.invertYTransform(y));
+                        labelContentHTML.setAttribute('onclick', 'XRNA.onClickLabel(this)');
+                        labelContentsGroupHTML.appendChild(labelContentHTML);
                         let
-                            boundingBox = XRNA.getBoundingBox(contentHTML);
+                            boundingBox = XRNA.getBoundingBox(labelContentHTML);
                         // Make corrections to the content's position
-                        contentHTML.setAttribute('x', '' + (x - boundingBox.width / 2.0));
-                        contentHTML.setAttribute('y', '' + (y + boundingBox.height / 3.0));
+                        labelContentHTML.setAttribute('x', '' + (x - boundingBox.width / 2.0));
+                        labelContentHTML.setAttribute('y', '' + (y + boundingBox.height / 3.0));
                         // Recalculate the bounding box. Manual correction appears ineffective.
-                        boundingBox = XRNA.getBoundingBox(contentHTML);
+                        boundingBox = XRNA.getBoundingBox(labelContentHTML);
                         boundingBoxes.push(boundingBox);
                         let
                             boundingBoxHTML = document.createElementNS(svgNameSpaceURL, 'rect');
