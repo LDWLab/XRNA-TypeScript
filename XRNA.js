@@ -57,8 +57,8 @@ var Nucleotide = /** @class */ (function () {
         }
         this.labelContent = labelContent;
         if (labelContent) {
-            this.labelContent[0] += x;
-            this.labelContent[1] += y;
+            this.labelContent.x += x;
+            this.labelContent.y += y;
         }
         this.font = font;
         this.color = color;
@@ -162,37 +162,78 @@ var XRNA = /** @class */ (function () {
             return false;
         };
         XRNA.canvasHTML.onmousedown = function (event) {
-            var newButtonIndex = XRNA.getButtonIndex(event);
-            var pressedButtonIndex = newButtonIndex - XRNA.buttonIndex;
+            var newButtonIndex = XRNA.getButtonIndex(event), pressedButtonIndex = newButtonIndex - XRNA.buttonIndex;
             XRNA.buttonIndex = newButtonIndex;
-            switch (pressedButtonIndex) {
-                case BUTTON_INDEX.RIGHT:
-                    XRNA.sceneDressingData.onDragX = event.pageX;
-                    XRNA.sceneDressingData.onDragY = event.pageY;
-                    return false;
+            if (pressedButtonIndex & BUTTON_INDEX.LEFT) {
+                if (XRNA.selection.selected.length > 0) {
+                    XRNA.selection.dragCoordinates.origin.x = event.pageX;
+                    XRNA.selection.dragCoordinates.origin.y = event.pageY;
+                }
             }
+            if (pressedButtonIndex & BUTTON_INDEX.RIGHT) {
+                XRNA.sceneDressingData.dragCoordinates.origin.x = event.pageX;
+                XRNA.sceneDressingData.dragCoordinates.origin.y = event.pageY;
+            }
+            return false;
         };
         XRNA.canvasHTML.onmouseup = function (event) {
-            var newButtonIndex = XRNA.getButtonIndex(event);
-            var releasedButtonIndex = XRNA.buttonIndex - newButtonIndex;
+            var newButtonIndex = XRNA.getButtonIndex(event), releasedButtonIndex = XRNA.buttonIndex - newButtonIndex;
             XRNA.buttonIndex = newButtonIndex;
-            switch (releasedButtonIndex) {
-                case BUTTON_INDEX.RIGHT:
-                    XRNA.sceneDressingData.cacheOriginX = XRNA.sceneDressingData.originX;
-                    XRNA.sceneDressingData.cacheOriginY = XRNA.sceneDressingData.originY;
-                    return false;
+            if (releasedButtonIndex & BUTTON_INDEX.LEFT) {
+                XRNA.selection.selected.forEach(function (selectedI) {
+                    // This code is important in clicking and dragging text elements around the scene.
+                    // Do not remove it.
+                    selectedI.boundingBoxes.forEach(function (boundingBox) { return boundingBox.setAttribute('transform', ' ' + boundingBox.getAttribute('transform')); });
+                    selectedI.htmlElements.forEach(function (htmlElement) { return htmlElement.setAttribute('transform', ' ' + htmlElement.getAttribute('transform')); });
+                    if (selectedI.textElement) {
+                        var transform = selectedI.textElement.getAttribute('transform'), transformComponents = /^(?:translate\([^\)]+\))? translate\((-?[\d\.]+) (-?[\d\.]+)\)(.+)$/.exec(transform);
+                        selectedI.textElement.setAttribute('transform', ' translate(' + (parseFloat(transformComponents[1]) + XRNA.selection.dx) + ' ' + (parseFloat(transformComponents[2]) + XRNA.selection.dy) + ')' + transformComponents[3]);
+                    }
+                    selectedI.elements.forEach(function (element) {
+                        element.x += XRNA.selection.dx;
+                        element.y += XRNA.selection.dy;
+                    });
+                    selectedI.onMouseUpAttributeUpdateHelpers.forEach(function (attributeUpdateHelper) {
+                        attributeUpdateHelper.htmlElement.setAttribute(attributeUpdateHelper.attribute, attributeUpdateHelper.helper(XRNA.selection.dx, XRNA.selection.dy));
+                    });
+                });
             }
+            if (releasedButtonIndex & BUTTON_INDEX.RIGHT) {
+                XRNA.sceneDressingData.dragCoordinates.cacheOrigin.x = XRNA.sceneDressingData.origin.x;
+                XRNA.sceneDressingData.dragCoordinates.cacheOrigin.y = XRNA.sceneDressingData.origin.y;
+            }
+            return false;
         };
         XRNA.canvasHTML.onmousemove = function (event) {
-            switch (XRNA.buttonIndex) {
-                case BUTTON_INDEX.RIGHT:
-                case BUTTON_INDEX.LEFT_RIGHT:
-                case BUTTON_INDEX.LEFT_MIDDLE_RIGHT:
-                    XRNA.sceneDressingData.originX = XRNA.sceneDressingData.cacheOriginX + event.pageX - XRNA.sceneDressingData.onDragX;
-                    XRNA.sceneDressingData.originY = XRNA.sceneDressingData.cacheOriginY + event.pageY - XRNA.sceneDressingData.onDragY;
-                    XRNA.updateSceneDressing();
-                    break;
+            if (XRNA.buttonIndex & BUTTON_INDEX.LEFT) {
+                var scale = XRNA.sceneDressingData.scale * XRNA.sceneScale;
+                XRNA.selection.dx = (event.pageX - XRNA.selection.dragCoordinates.origin.x) / scale,
+                    XRNA.selection.dy = -(event.pageY - XRNA.selection.dragCoordinates.origin.y) / scale;
+                XRNA.selection.selected.forEach(function (selectedI) {
+                    var transformHelper = function (htmlElement) {
+                        var transform = htmlElement.getAttribute('transform');
+                        htmlElement.setAttribute('transform', 'translate(' + XRNA.selection.dx + ',' + XRNA.selection.dy + ')' + transform.substring(transform.indexOf(' ')));
+                    };
+                    selectedI.boundingBoxes.forEach(function (boundingBox) {
+                        transformHelper(boundingBox);
+                    });
+                    selectedI.htmlElements.forEach(function (htmlElement) {
+                        transformHelper(htmlElement);
+                    });
+                    if (selectedI.textElement) {
+                        transformHelper(selectedI.textElement);
+                    }
+                    selectedI.onMouseMoveAttributeUpdateHelpers.forEach(function (attributeUpdateHelper) {
+                        attributeUpdateHelper.htmlElement.setAttribute(attributeUpdateHelper.attribute, attributeUpdateHelper.helper(XRNA.selection.dx, XRNA.selection.dy));
+                    });
+                });
             }
+            if (XRNA.buttonIndex & BUTTON_INDEX.RIGHT) {
+                XRNA.sceneDressingData.origin.x = XRNA.sceneDressingData.dragCoordinates.cacheOrigin.x + event.pageX - XRNA.sceneDressingData.dragCoordinates.origin.x;
+                XRNA.sceneDressingData.origin.y = XRNA.sceneDressingData.dragCoordinates.cacheOrigin.y + event.pageY - XRNA.sceneDressingData.dragCoordinates.origin.y;
+                XRNA.updateSceneDressing();
+            }
+            return false;
         };
     };
     XRNA.getButtonIndex = function (event) {
@@ -221,28 +262,28 @@ var XRNA = /** @class */ (function () {
     };
     XRNA.resetSelection = function () {
         // Clear the previous selection
-        XRNA.selection.boundingBoxHTMLs.forEach(function (boundingBoxHTML) {
-            boundingBoxHTML.setAttribute('stroke', 'none');
-        });
-        XRNA.selection.boundingBoxHTMLs = new Array();
-        XRNA.selection.selected = new Array();
+        XRNA.selection.selected.forEach(function (selectedI) { return selectedI.boundingBoxes.forEach(function (boundingBox) { return boundingBox.setAttribute('stroke', 'none'); }); });
+        XRNA.selection.selected = [];
     };
     XRNA.resetView = function () {
-        XRNA.sceneDressingData.originX = 0;
-        XRNA.sceneDressingData.originY = 0;
+        XRNA.sceneDressingData.origin.x = 0;
+        XRNA.sceneDressingData.origin.y = 0;
+        XRNA.sceneDressingData.dragCoordinates.cacheOrigin.x = 0;
+        XRNA.sceneDressingData.dragCoordinates.cacheOrigin.y = 0;
         XRNA.sceneDressingData.zoom = 0;
-        XRNA.sceneDressingData.cacheOriginX = 0;
-        XRNA.sceneDressingData.cacheOriginY = 0;
         XRNA.updateSceneDressing();
         document.getElementById('zoom slider').value = XRNA.sceneDressingData.zoom;
     };
     XRNA.setZoom = function (zoom) {
         XRNA.sceneDressingData.zoom = XRNA.clamp(XRNA.sceneDressingData.minimumZoom, zoom, XRNA.sceneDressingData.maximumZoom);
+        XRNA.sceneDressingData.scale = XRNA.zoomToScale(XRNA.sceneDressingData.zoom);
         XRNA.updateSceneDressing();
     };
+    XRNA.zoomToScale = function (zoom) {
+        return Math.pow(1.05, zoom);
+    };
     XRNA.updateSceneDressing = function () {
-        var scale = Math.pow(1.05, XRNA.sceneDressingData.zoom);
-        document.getElementById('sceneDressing').setAttribute('transform', 'translate(' + XRNA.sceneDressingData.originX + ' ' + XRNA.sceneDressingData.originY + ') scale(' + scale + ' ' + scale + ')');
+        document.getElementById('sceneDressing').setAttribute('transform', 'translate(' + XRNA.sceneDressingData.origin.x + ' ' + XRNA.sceneDressingData.origin.y + ') scale(' + XRNA.sceneDressingData.scale + ' ' + XRNA.sceneDressingData.scale + ')');
     };
     XRNA.handleInputUrl = function (inputUrl) {
         inputUrl = inputUrl.trim();
@@ -402,7 +443,7 @@ var XRNA = /** @class */ (function () {
                         }
                         helperFunctions.push(function (nucleotide) { return nucleotide.font = XRNA.fontIDToFont(fontID_1); });
                     }
-                    helperFunctions.push(function (nucleotide) { return nucleotide.font[0] = subElement.getAttribute('FontSize') ? parseFloat(fontIDAsString_1) : 8.0; });
+                    helperFunctions.push(function (nucleotide) { return nucleotide.font.size = subElement.getAttribute('FontSize') ? parseFloat(fontIDAsString_1) : 8.0; });
                     XRNA.applyHelperFunctionsToRefIDs(parsingData.refIds, helperFunctions);
                     break;
                 }
@@ -465,8 +506,14 @@ var XRNA = /** @class */ (function () {
                                 // l x y ang size fontID color content
                                 // ang is ignored by XRNA source code.
                                 var font = XRNA.fontIDToFont(parseInt(splitLineElements[5]));
-                                font[0] = parseFloat(splitLineElements[4]);
-                                labelContent_1 = [parseFloat(splitLineElements[1]), parseFloat(splitLineElements[2]), splitLineElements[7].replace(/\"/g, ''), font, XRNA.parseRGB(splitLineElements[6])];
+                                font.size = parseFloat(splitLineElements[4]);
+                                labelContent_1 = {
+                                    x: parseFloat(splitLineElements[1]),
+                                    y: parseFloat(splitLineElements[2]),
+                                    content: splitLineElements[7].replace(/\"/g, ''),
+                                    font: font,
+                                    color: XRNA.parseRGB(splitLineElements[6])
+                                };
                                 break;
                             }
                         }
@@ -650,12 +697,12 @@ var XRNA = /** @class */ (function () {
                     if (nucleotide.labelContent || nucleotide.labelContent) {
                         nucLabelLists += '<Nuc RefID=\'' + (firstNucleotideIndex + nucleotideIndex) + '\'>\n<LabelList>\n';
                         if (nucleotide.labelLine) {
-                            var line = nucleotide.labelLine, lineColor = line[5];
+                            var line = nucleotide.labelLine, lineColor = line.color;
                             nucLabelLists += 'l ' + line.v0.x + ' ' + line.v0.y + ' ' + line.v1.x + ' ' + line.v1.y + ' ' + line.strokeWidth + ' ' + XRNA.compressRGB(lineColor) + ' 0.0 0 0 0 0\n';
                         }
                         if (nucleotide.labelContent) {
-                            var content = nucleotide.labelContent, contentColor = content[4], contentFont = content[3];
-                            nucLabelLists += 's ' + content[0] + ' ' + content[1] + ' 0.0 ' + contentFont[0] + ' ' + XRNA.fontToFontID(contentFont) + ' ' + XRNA.compressRGB(contentColor) + ' \"' + content[2] + '\"\n';
+                            var content = nucleotide.labelContent, contentColor = content.color, contentFont = content.font;
+                            nucLabelLists += 's ' + content.x + ' ' + content.y + ' 0.0 ' + contentFont.size + ' ' + XRNA.fontToFontID(contentFont) + ' ' + XRNA.compressRGB(contentColor) + ' \"' + content.content + '\"\n';
                         }
                         nucLabelLists += '</LabelList>\n</Nuc>\n';
                     }
@@ -692,6 +739,9 @@ var XRNA = /** @class */ (function () {
     XRNA.getBoundingBoxHTML = function (boundingBox, parentID) {
         var boundingBoxHTML = document.createElementNS(svgNameSpaceURL, 'rect');
         boundingBoxHTML.setAttribute('id', XRNA.boundingBoxID(parentID));
+        // This is used when clicking and dragging elements around the scene.
+        // Do not remove it.
+        boundingBoxHTML.setAttribute('transform', ' ');
         boundingBoxHTML.setAttribute('x', '' + boundingBox.x);
         boundingBoxHTML.setAttribute('y', '' + boundingBox.y);
         boundingBoxHTML.setAttribute('width', '' + boundingBox.width);
@@ -712,8 +762,11 @@ var XRNA = /** @class */ (function () {
     XRNA.labelContentID = function (parentID) {
         return parentID + ': Label Content';
     };
-    XRNA.labelLineBodyID = function (parentID) {
+    XRNA.labelLineID = function (parentID) {
         return parentID + ': Label Line';
+    };
+    XRNA.labelLineBodyID = function (parentID) {
+        return parentID + ': Body';
     };
     XRNA.labelLineCap0ID = function (parentID) {
         return parentID + ': Cap #0';
@@ -726,8 +779,8 @@ var XRNA = /** @class */ (function () {
     };
     XRNA.fitSceneToBounds = function () {
         // Scale to fit the screen
-        var sceneScale = Math.min(XRNA.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), XRNA.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
-        XRNA.sceneTransform.unshift('scale(' + sceneScale + ' ' + sceneScale + ')');
+        XRNA.sceneScale = Math.min(XRNA.canvasBounds.width / (XRNA.sceneBounds.maximumX - XRNA.sceneBounds.minimumX), XRNA.canvasBounds.height / (XRNA.sceneBounds.maximumY - XRNA.sceneBounds.minimumY));
+        XRNA.sceneTransform.unshift('scale(' + XRNA.sceneScale + ' ' + XRNA.sceneScale + ')');
         document.getElementById('scene').setAttribute('transform', XRNA.sceneTransform.join(' '));
         // Remove the elements of XRNA.sceneTransform which were added by fitSceneToBounds().
         // This is necessary to ensure correct scene fitting when fitSceneToBounds() is called multiple times.
@@ -739,7 +792,9 @@ var XRNA = /** @class */ (function () {
         return (1 - interpolationFactor) * x0 + interpolationFactor * x1;
     };
     XRNA.invertYTransform = function (y) {
-        return 'translate(0 ' + y + ') scale(1 -1) translate(0 ' + -y + ')';
+        // The space at the beginning is used when clicking text elements to move them around the scene. 
+        // Do not remove it.
+        return ' translate(0 ' + y + ') scale(1 -1) translate(0 ' + -y + ')';
     };
     XRNA.magnitudeSquared = function (x, y) {
         return x * x + y * y;
@@ -757,54 +812,164 @@ var XRNA = /** @class */ (function () {
         // Adapted from StringUtil.java:ssFontToFont
         switch (fontID) {
             case 0:
-                return [null, 'Helvetica', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'Helvetica',
+                    style: 'normal',
+                    weight: 'normal'
+                };
             case 1:
-                return [null, 'Helvetica', 'italic', 'normal'];
+                return {
+                    size: null,
+                    family: 'Helvetica',
+                    style: 'italic',
+                    weight: 'normal'
+                };
             case 2:
-                return [null, 'Helvetica', 'normal', 'bold'];
+                return {
+                    size: null,
+                    family: 'Helvetica',
+                    style: 'normal',
+                    weight: 'bold'
+                };
             case 3:
-                return [null, 'Helvetica', 'italic', 'bold'];
+                return {
+                    size: null,
+                    family: 'Helvetica',
+                    style: 'italic',
+                    weight: 'bold'
+                };
             case 4:
-                return [null, 'TimesRoman', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'TimesRoman',
+                    style: 'normal',
+                    weight: 'normal'
+                };
             case 5:
-                return [null, 'TimesRoman', 'italic', 'normal'];
+                return {
+                    size: null,
+                    family: 'TimesRoman',
+                    style: 'italic',
+                    weight: 'normal'
+                };
             case 6:
-                return [null, 'TimesRoman', 'normal', 'bold'];
+                return {
+                    size: null,
+                    family: 'TimesRoman',
+                    style: 'normal',
+                    weight: 'bold'
+                };
             case 7:
-                return [null, 'TimesRoman', 'italic', 'bold'];
+                return {
+                    size: null,
+                    family: 'TimesRoman',
+                    style: 'italic',
+                    weight: 'bold'
+                };
             case 8:
-                return [null, 'Courier', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'Courier',
+                    style: 'normal',
+                    weight: 'normal'
+                };
             case 9:
-                return [null, 'Courier', 'italic', 'normal'];
+                return {
+                    size: null,
+                    family: 'Courier',
+                    style: 'italic',
+                    weight: 'normal'
+                };
             case 10:
-                return [null, 'Courier', 'normal', 'bold'];
+                return {
+                    size: null,
+                    family: 'Courier',
+                    style: 'normal',
+                    weight: 'bold'
+                };
             case 11:
-                return [null, 'Courier', 'italic', 'bold'];
+                return {
+                    size: null,
+                    family: 'Courier',
+                    style: 'italic',
+                    weight: 'bold'
+                };
             case 12:
-                return [null, 'TimesRoman', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'TimesRoman',
+                    style: 'normal',
+                    weight: 'normal'
+                };
             case 13:
-                return [null, 'Dialog', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'Dialog',
+                    style: 'normal',
+                    weight: 'normal'
+                };
             case 14:
-                return [null, 'Dialog', 'italic', 'normal'];
+                return {
+                    size: null,
+                    family: 'Dialog',
+                    style: 'italic',
+                    weight: 'normal'
+                };
             case 15:
-                return [null, 'Dialog', 'normal', 'bold'];
+                return {
+                    size: null,
+                    family: 'Dialog',
+                    style: 'normal',
+                    weight: 'bold'
+                };
             case 16:
-                return [null, 'Dialog', 'italic', 'bold'];
+                return {
+                    size: null,
+                    family: 'Dialog',
+                    style: 'italic',
+                    weight: 'bold'
+                };
             case 17:
-                return [null, 'DialogInput', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'DialogInput',
+                    style: 'normal',
+                    weight: 'normal'
+                };
             case 18:
-                return [null, 'DialogInput', 'italic', 'normal'];
+                return {
+                    size: null,
+                    family: 'DialogInput',
+                    style: 'italic',
+                    weight: 'normal'
+                };
             case 19:
-                return [null, 'DialogInput', 'normal', 'bold'];
+                return {
+                    size: null,
+                    family: 'DialogInput',
+                    style: 'normal',
+                    weight: 'bold'
+                };
             case 20:
-                return [null, 'DialogInput', 'italic', 'bold'];
+                return {
+                    size: null,
+                    family: 'DialogInput',
+                    style: 'italic',
+                    weight: 'bold'
+                };
             default:
-                return [null, 'Helvetica', 'normal', 'normal'];
+                return {
+                    size: null,
+                    family: 'Helvetica',
+                    style: 'normal',
+                    weight: 'normal'
+                };
         }
     };
     XRNA.fontToFontID = function (font) {
         // A logical inversion of fontIDToFont. Implemented for backward compatibility.
-        switch (font[1] + '_' + font[2] + '_' + font[3]) {
+        switch (font.family + '_' + font.style + '_' + font.weight) {
             default:
             case 'Helvetica_normal_normal':
                 return 0;
@@ -852,24 +1017,187 @@ var XRNA = /** @class */ (function () {
     };
     XRNA.onClickLabel = function (labelHTML) {
         XRNA.resetSelection();
-        var boundingBoxHTML = document.getElementById(XRNA.boundingBoxID(labelHTML.getAttribute('id')));
-        boundingBoxHTML.setAttribute('stroke', 'red');
-        XRNA.selection.boundingBoxHTMLs.push(boundingBoxHTML);
+        var boundingBoxHTML = document.getElementById(XRNA.boundingBoxID(labelHTML.getAttribute('id'))), id = labelHTML.id, indices = id.match(/#\d+/g), rnaComplexIndex = parseInt(indices[0].substring(1)), rnaMoleculeIndex = parseInt(indices[1].substring(1)), nucleotideIndex = parseInt(indices[2].substring(1)), nucleotide = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex], elements = new Array(), boundingBoxes = [
+            boundingBoxHTML
+        ], htmlElements = [], textElement = null, labelLineID = id.substring(0, id.lastIndexOf(':')), cap0ID = XRNA.labelLineCap0ID(labelLineID), cap1ID = XRNA.labelLineCap1ID(labelLineID), bodyID = XRNA.labelLineBodyID(labelLineID), onMouseMoveAttributeUpdateHelpers = new Array(), onMouseUpAttributeUpdateHelpers = new Array(), cap0 = document.getElementById(cap0ID), body = document.getElementById(bodyID), cap1 = document.getElementById(cap1ID), cap0BoundingBox = document.getElementById(XRNA.boundingBoxID(cap0ID)), cap1BoundingBox = document.getElementById(XRNA.boundingBoxID(cap1ID)), bodyBoundingBox = document.getElementById(XRNA.boundingBoxID(bodyID));
+        if (indices.length > 3) {
+            // Select a single label-line endpoint.
+            var htmlElement = document.getElementById(labelLineID), x1_1 = parseFloat(htmlElement.getAttribute('x1')), y1_1 = parseFloat(htmlElement.getAttribute('y1')), x2_1 = parseFloat(htmlElement.getAttribute('x2')), y2_1 = parseFloat(htmlElement.getAttribute('y2')), paths_1, boundingBox_1;
+            switch (indices[3].substring(1)) {
+                case '0': {
+                    elements = [
+                        nucleotide.labelLine.v0
+                    ];
+                    onMouseMoveAttributeUpdateHelpers.push({ htmlElement: htmlElement, attribute: 'x1', helper: function (dx, dy) { return '' + (x1_1 + dx); } });
+                    onMouseMoveAttributeUpdateHelpers.push({ htmlElement: htmlElement, attribute: 'y1', helper: function (dx, dy) { return '' + (y1_1 + dy); } });
+                    onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap0, attribute: 'd', helper: function (dx, dy) {
+                            paths_1 = XRNA.getPathsFromLine(x1_1 + dx, y1_1 + dy, x2_1, y2_1);
+                            return paths_1.cap0Path;
+                        } });
+                    break;
+                }
+                case '1': {
+                    elements = [
+                        nucleotide.labelLine.v1
+                    ];
+                    onMouseMoveAttributeUpdateHelpers.push({ htmlElement: htmlElement, attribute: 'x2', helper: function (dx, dy) { return '' + (x2_1 + dx); } });
+                    onMouseMoveAttributeUpdateHelpers.push({ htmlElement: htmlElement, attribute: 'y2', helper: function (dx, dy) { return '' + (y2_1 + dy); } });
+                    onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap0, attribute: 'd', helper: function (dx, dy) {
+                            paths_1 = XRNA.getPathsFromLine(x1_1, y1_1, x2_1 + dx, y2_1 + dy);
+                            return paths_1.cap0Path;
+                        } });
+                    break;
+                }
+            }
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: body, attribute: 'd', helper: function (dx, dy) {
+                    return paths_1.bodyPath;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap1, attribute: 'd', helper: function (dx, dy) {
+                    return paths_1.cap1Path;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap0BoundingBox, attribute: 'x', helper: function (dx, dy) {
+                    boundingBox_1 = XRNA.getBoundingBox(cap0);
+                    return '' + boundingBox_1.x;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap0BoundingBox, attribute: 'y', helper: function (dx, dy) {
+                    return '' + boundingBox_1.y;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap0BoundingBox, attribute: 'width', helper: function (dx, dy) {
+                    return '' + boundingBox_1.width;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap0BoundingBox, attribute: 'height', helper: function (dx, dy) {
+                    return '' + boundingBox_1.height;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: bodyBoundingBox, attribute: 'x', helper: function (dx, dy) {
+                    boundingBox_1 = XRNA.getBoundingBox(body);
+                    return '' + boundingBox_1.x;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: bodyBoundingBox, attribute: 'y', helper: function (dx, dy) {
+                    return '' + boundingBox_1.y;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: bodyBoundingBox, attribute: 'width', helper: function (dx, dy) {
+                    return '' + boundingBox_1.width;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: bodyBoundingBox, attribute: 'height', helper: function (dx, dy) {
+                    return '' + boundingBox_1.height;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap1BoundingBox, attribute: 'x', helper: function (dx, dy) {
+                    boundingBox_1 = XRNA.getBoundingBox(cap1);
+                    return '' + boundingBox_1.x;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap1BoundingBox, attribute: 'y', helper: function (dx, dy) {
+                    return '' + boundingBox_1.y;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap1BoundingBox, attribute: 'width', helper: function (dx, dy) {
+                    return '' + boundingBox_1.width;
+                } });
+            onMouseUpAttributeUpdateHelpers.push({ htmlElement: cap1BoundingBox, attribute: 'height', helper: function (dx, dy) {
+                    return '' + boundingBox_1.height;
+                } });
+        }
+        else if (/(?:B|b)ody/.test(id)) {
+            // Select both label-line endpoints.
+            elements = [
+                nucleotide.labelLine.v0,
+                nucleotide.labelLine.v1
+            ];
+            // The entire line is selected. The line will move as one shape.
+            boundingBoxes.push(cap0BoundingBox);
+            boundingBoxes.push(cap1BoundingBox);
+            htmlElements.push(cap0);
+            htmlElements.push(cap1);
+            htmlElements.push(body);
+            htmlElements.push(document.getElementById(labelLineID));
+        }
+        else {
+            textElement = labelHTML;
+            elements = [
+                nucleotide.labelContent
+            ];
+        }
+        XRNA.selection.selected.push({
+            boundingBoxes: boundingBoxes,
+            htmlElements: htmlElements,
+            textElement: textElement,
+            elements: elements,
+            onMouseMoveAttributeUpdateHelpers: onMouseMoveAttributeUpdateHelpers,
+            onMouseUpAttributeUpdateHelpers: onMouseUpAttributeUpdateHelpers
+        });
+        boundingBoxes.forEach(function (boundingBoxHTML) { return boundingBoxHTML.setAttribute('stroke', 'red'); });
     };
     XRNA.onClickNucleotide = function (nucleotideHTML) {
         XRNA.resetSelection();
-        var indices = /^.*#(\d+).*#(\d+).*#(\d+).*$/g.exec(nucleotideHTML.id), rnaComplexIndex = parseInt(indices[1]), rnaMoleculeIndex = parseInt(indices[2]), nucleotideIndex = parseInt(indices[3]), selectionConstraint = XRNA.selectionConstraintDescriptionDictionary[XRNA.selectionConstraintHTML.value];
+        var indices = nucleotideHTML.id.match(/#\d+/g), rnaComplexIndex = parseInt(indices[0].substring(1)), rnaMoleculeIndex = parseInt(indices[1].substring(1)), nucleotideIndex = parseInt(indices[2].substring(1)), selectionConstraint = XRNA.selectionConstraintDescriptionDictionary[XRNA.selectionConstraintHTML.value];
         if (selectionConstraint.approveSelectedIndices(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex)) {
             selectionConstraint.getSelectedNucleotideIndices(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex).forEach(function (adjacentNucleotideIndices) {
-                var rnaComplexIndex = adjacentNucleotideIndices.rnaComplexIndex, rnaMoleculeIndex = adjacentNucleotideIndices.rnaMoleculeIndex, nucleotideIndex = adjacentNucleotideIndices.nucleotideIndex, boundingBoxHTML = document.getElementById(XRNA.boundingBoxID(XRNA.nucleotideID(XRNA.rnaMoleculeID(XRNA.complexID(rnaComplexIndex), rnaMoleculeIndex), nucleotideIndex)));
-                XRNA.selection.boundingBoxHTMLs.push(boundingBoxHTML);
-                XRNA.selection.selected.push(XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex]);
-                boundingBoxHTML.setAttribute('stroke', 'red');
+                var rnaComplexIndex = adjacentNucleotideIndices.rnaComplexIndex, rnaMoleculeIndex = adjacentNucleotideIndices.rnaMoleculeIndex, nucleotideIndex = adjacentNucleotideIndices.nucleotideIndex, nucleotideID = XRNA.nucleotideID(XRNA.rnaMoleculeID(XRNA.complexID(rnaComplexIndex), rnaMoleculeIndex), nucleotideIndex), nucleotide = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex].nucleotides[nucleotideIndex];
+                XRNA.selection.selected.push({
+                    boundingBoxes: [
+                        document.getElementById(XRNA.boundingBoxID(nucleotideID))
+                    ],
+                    htmlElements: [],
+                    textElement: document.getElementById(nucleotideID),
+                    elements: [
+                        nucleotide
+                    ],
+                    onMouseMoveAttributeUpdateHelpers: [],
+                    onMouseUpAttributeUpdateHelpers: []
+                });
+                if (nucleotide.labelContent) {
+                    var labelContentID = XRNA.labelContentID(nucleotideID);
+                    XRNA.selection.selected.push({
+                        boundingBoxes: [
+                            document.getElementById(XRNA.boundingBoxID(labelContentID))
+                        ],
+                        htmlElements: [],
+                        textElement: document.getElementById(labelContentID),
+                        elements: [
+                            nucleotide.labelContent
+                        ],
+                        onMouseMoveAttributeUpdateHelpers: [],
+                        onMouseUpAttributeUpdateHelpers: []
+                    });
+                }
+                if (nucleotide.labelLine) {
+                    var labelLineID = XRNA.labelLineID(nucleotideID), cap0ID = XRNA.labelLineCap0ID(labelLineID), bodyID = XRNA.labelLineBodyID(labelLineID), cap1ID = XRNA.labelLineCap1ID(labelLineID);
+                    XRNA.selection.selected.push({
+                        boundingBoxes: [
+                            document.getElementById(XRNA.boundingBoxID(cap0ID)),
+                            document.getElementById(XRNA.boundingBoxID(bodyID)),
+                            document.getElementById(XRNA.boundingBoxID(cap1ID))
+                        ],
+                        htmlElements: [
+                            document.getElementById(labelLineID),
+                            document.getElementById(cap0ID),
+                            document.getElementById(bodyID),
+                            document.getElementById(cap1ID)
+                        ],
+                        textElement: null,
+                        elements: [
+                            nucleotide.labelLine.v0,
+                            nucleotide.labelLine.v1
+                        ],
+                        onMouseMoveAttributeUpdateHelpers: [],
+                        onMouseUpAttributeUpdateHelpers: []
+                    });
+                }
+                XRNA.selection.selected.forEach(function (selectedI) { return selectedI.boundingBoxes.forEach(function (boundingBox) { return boundingBox.setAttribute('stroke', 'red'); }); });
             });
         }
         else {
             alert(selectionConstraint.getErrorMessage());
         }
+    };
+    XRNA.getPathsFromLine = function (x0, y0, x1, y1) {
+        var dx = x1 - x0, dy = y1 - y0, interpolation0X = XRNA.linearlyInterpolate(x0, x1, 0.25), interpolation0Y = XRNA.linearlyInterpolate(y0, y1, 0.25), interpolation1X = XRNA.linearlyInterpolate(x0, x1, 0.75), interpolation1Y = XRNA.linearlyInterpolate(y0, y1, 0.75), clickableScalar = 1, magnitude = XRNA.magnitude(dx, dy);
+        dx /= magnitude;
+        dy /= magnitude;
+        var interpolation0Translated0 = { x: interpolation0X - dy * clickableScalar, y: interpolation0Y + dx * clickableScalar }, interpolation0Translated1 = { x: interpolation0X + dy * clickableScalar, y: interpolation0Y - dx * clickableScalar }, interpolation1Translated0 = { x: interpolation1X - dy * clickableScalar, y: interpolation1Y + dx * clickableScalar }, interpolation1Translated1 = { x: interpolation1X + dy * clickableScalar, y: interpolation1Y - dx * clickableScalar };
+        return {
+            cap0Path: 'M ' + interpolation0Translated1.x + ' ' + interpolation0Translated1.y + ' L ' + (x0 + dy * clickableScalar) + ' ' + (y0 - dx * clickableScalar) + ' a 0.5 0.5 0 0 0 ' + (-2 * dy * clickableScalar) + ' ' + (2 * dx * clickableScalar) + ' L ' + interpolation0Translated0.x + ' ' + interpolation0Translated0.y + ' z',
+            bodyPath: 'M ' + interpolation0Translated0.x + ' ' + interpolation0Translated0.y + ' L ' + interpolation1Translated0.x + ' ' + interpolation1Translated0.y + ' L ' + interpolation1Translated1.x + ' ' + interpolation1Translated1.y + ' L ' + interpolation0Translated1.x + ' ' + interpolation0Translated1.y + ' z',
+            cap1Path: 'M ' + interpolation1Translated0.x + ' ' + interpolation1Translated0.y + ' L ' + (x1 - dy * clickableScalar) + ' ' + (y1 + dx * clickableScalar) + ' a 0.5 0.5 0 0 0 ' + (2 * dy * clickableScalar) + ' ' + (-2 * dx * clickableScalar) + ' L ' + interpolation1Translated1.x + ' ' + interpolation1Translated1.y + ' z'
+        };
     };
     XRNA.prepareScene = function () {
         var sceneDressingHTML = document.getElementById('sceneDressing');
@@ -877,7 +1205,7 @@ var XRNA = /** @class */ (function () {
         while (sceneDressingHTML.firstChild) {
             sceneDressingHTML.removeChild(sceneDressingHTML.firstChild);
         }
-        document.getElementById('background').setAttribute('onclick', 'XRNA.resetSelection();');
+        document.getElementById('background').setAttribute('onmousedown', 'XRNA.resetSelection();');
         XRNA.canvasHTML.appendChild(sceneDressingHTML);
         var sceneHTML = document.createElementNS(svgNameSpaceURL, 'g');
         sceneHTML.setAttribute('id', 'scene');
@@ -914,54 +1242,62 @@ var XRNA = /** @class */ (function () {
                     nucleotideHTML.setAttribute('y', '' + nucleotide.y);
                     var nucleotideColor = nucleotide.color;
                     nucleotideHTML.setAttribute('stroke', 'rgb(' + nucleotideColor.red + ' ' + nucleotideColor.green + ' ' + nucleotideColor.blue + ')');
-                    nucleotideHTML.setAttribute('font-size', '' + nucleotide.font[0]);
-                    nucleotideHTML.setAttribute('font-family', nucleotide.font[1]);
-                    nucleotideHTML.setAttribute('font-style', nucleotide.font[2]);
-                    nucleotideHTML.setAttribute('font-weight', nucleotide.font[3]);
+                    nucleotideHTML.setAttribute('font-size', '' + nucleotide.font.size);
+                    nucleotideHTML.setAttribute('font-family', nucleotide.font.family);
+                    nucleotideHTML.setAttribute('font-style', nucleotide.font.style);
+                    nucleotideHTML.setAttribute('font-weight', nucleotide.font.weight);
                     nucleotideHTML.setAttribute('transform', XRNA.invertYTransform(nucleotide.y));
                     nucleotideHTML.setAttribute('onclick', 'XRNA.onClickNucleotide(this);');
                     rnaMoleculeHTML.appendChild(nucleotideHTML);
-                    var boundingBoxes = new Array(), nucleotideBoundingBox = XRNA.getBoundingBox(nucleotideHTML), boundingBoxHTML = document.createElementNS(svgNameSpaceURL, 'rect');
-                    boundingBoxHTML.setAttribute('id', XRNA.boundingBoxID(nucleotideID));
-                    boundingBoxHTML.setAttribute('x', '' + nucleotideBoundingBox.x);
-                    boundingBoxHTML.setAttribute('y', '' + nucleotideBoundingBox.y);
-                    boundingBoxHTML.setAttribute('width', '' + nucleotideBoundingBox.width);
-                    boundingBoxHTML.setAttribute('height', '' + nucleotideBoundingBox.height);
-                    boundingBoxHTML.setAttribute('stroke', 'none');
-                    boundingBoxHTML.setAttribute('fill', 'none');
+                    var boundingBoxes = new Array(), nucleotideBoundingBox = XRNA.getBoundingBox(nucleotideHTML), boundingBoxHTML = XRNA.getBoundingBoxHTML(nucleotideBoundingBox, nucleotideID);
                     boundingBoxesHTML.appendChild(boundingBoxHTML);
                     boundingBoxes.push(nucleotideBoundingBox);
                     var nucleotideBoundingBoxCenterX = nucleotideBoundingBox.x + nucleotideBoundingBox.width / 2.0, nucleotideBoundingBoxCenterY = nucleotideBoundingBox.y + nucleotideBoundingBox.height / 2.0;
                     if (nucleotide.labelLine) {
-                        var labelLineClickableBodyHTML = document.createElementNS(svgNameSpaceURL, 'path'), labelLineClickableCap0HTML = document.createElementNS(svgNameSpaceURL, 'path'), labelLineClickableCap1HTML = document.createElementNS(svgNameSpaceURL, 'path'), labelLine = nucleotide.labelLine, x0 = nucleotideBoundingBoxCenterX + labelLine.v0.x, y0 = nucleotideBoundingBoxCenterY + labelLine.v0.y, x1 = nucleotideBoundingBoxCenterX + labelLine.v1.x, y1 = nucleotideBoundingBoxCenterY + labelLine.v1.y, dx = x1 - x0, dy = y1 - y0, labelLineHTML = document.createElementNS(svgNameSpaceURL, 'line'), labelLineID = XRNA.labelLineBodyID(nucleotideID), lineColor = labelLine.color, interpolation0X = XRNA.linearlyInterpolate(x0, x1, 0.25), interpolation0Y = XRNA.linearlyInterpolate(y0, y1, 0.25), interpolation1X = XRNA.linearlyInterpolate(x0, x1, 0.75), interpolation1Y = XRNA.linearlyInterpolate(y0, y1, 0.75), clickableScalar = 0.2, interpolation0Translated0 = { x: interpolation0X - dy * clickableScalar, y: interpolation0Y + dx * clickableScalar }, interpolation0Translated1 = { x: interpolation0X + dy * clickableScalar, y: interpolation0Y - dx * clickableScalar }, interpolation1Translated0 = { x: interpolation1X - dy * clickableScalar, y: interpolation1Y + dx * clickableScalar }, interpolation1Translated1 = { x: interpolation1X + dy * clickableScalar, y: interpolation1Y - dx * clickableScalar }, labelLineBodyID = XRNA.labelLineBodyID(nucleotideID), labelLineCap0ID = XRNA.labelLineCap0ID(nucleotideID), labelLineCap1ID = XRNA.labelLineCap1ID(nucleotideID);
-                        labelLineClickableBodyHTML.setAttribute('d', 'M ' + interpolation0Translated0.x + ' ' + interpolation0Translated0.y + ' L ' + interpolation1Translated0.x + ' ' + interpolation1Translated0.y + ' L ' + interpolation1Translated1.x + ' ' + interpolation1Translated1.y + ' L ' + interpolation0Translated1.x + ' ' + interpolation0Translated1.y + ' z');
+                        var labelLineHTML = document.createElementNS(svgNameSpaceURL, 'line'), labelLineClickableBodyHTML = document.createElementNS(svgNameSpaceURL, 'path'), labelLineClickableCap0HTML = document.createElementNS(svgNameSpaceURL, 'path'), labelLineClickableCap1HTML = document.createElementNS(svgNameSpaceURL, 'path'), labelLine = nucleotide.labelLine, x0 = nucleotideBoundingBoxCenterX + labelLine.v0.x, y0 = nucleotideBoundingBoxCenterY + labelLine.v0.y, x1 = nucleotideBoundingBoxCenterX + labelLine.v1.x, y1 = nucleotideBoundingBoxCenterY + labelLine.v1.y, paths = XRNA.getPathsFromLine(x0, y0, x1, y1), lineColor = labelLine.color, labelLineID = XRNA.labelLineID(nucleotideID), labelLineBodyID = XRNA.labelLineBodyID(labelLineID), labelLineCap0ID = XRNA.labelLineCap0ID(labelLineID), labelLineCap1ID = XRNA.labelLineCap1ID(labelLineID);
+                        labelLineClickableBodyHTML.setAttribute('d', paths.bodyPath);
                         labelLineClickableBodyHTML.setAttribute('id', '' + labelLineBodyID);
                         labelLineClickableBodyHTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
-                        labelLineClickableBodyHTML.setAttribute('visibility', 'hidden');
+                        // labelLineClickableBodyHTML.setAttribute('visibility', 'hidden');
+                        labelLineClickableBodyHTML.setAttribute('fill', 'red');
+                        // This is important in dragging elements around the scene.
+                        // Do not remove it.
+                        labelLineClickableBodyHTML.setAttribute('transform', ' ');
                         labelLineClickableBodyHTML.setAttribute('pointer-events', 'all');
                         labelLinesGroupHTML.appendChild(labelLineClickableBodyHTML);
-                        labelLineClickableCap0HTML.setAttribute('d', 'M ' + interpolation0Translated1.x + ' ' + interpolation0Translated1.y + ' L ' + (x0 + dy * clickableScalar) + ' ' + (y0 - dx * clickableScalar) + ' a 0.5 0.5 0 0 0 ' + (-2 * dy * clickableScalar) + ' ' + (2 * dx * clickableScalar) + ' L ' + interpolation0Translated0.x + ' ' + interpolation0Translated0.y + ' z');
+                        labelLineClickableCap0HTML.setAttribute('d', paths.cap0Path);
                         labelLineClickableCap0HTML.setAttribute('id', '' + labelLineCap0ID);
                         labelLineClickableCap0HTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
-                        labelLineClickableCap0HTML.setAttribute('visibility', 'hidden');
+                        // labelLineClickableCap0HTML.setAttribute('visibility', 'hidden');
+                        labelLineClickableCap0HTML.setAttribute('fill', 'green');
+                        // This is important in dragging elements around the scene.
+                        // Do not remove it.
+                        labelLineClickableCap0HTML.setAttribute('transform', ' ');
                         labelLineClickableCap0HTML.setAttribute('pointer-events', 'all');
                         labelLinesGroupHTML.appendChild(labelLineClickableCap0HTML);
-                        labelLineClickableCap1HTML.setAttribute('d', 'M ' + interpolation1Translated0.x + ' ' + interpolation1Translated0.y + ' L ' + (x1 - dy * clickableScalar) + ' ' + (y1 + dx * clickableScalar) + ' a 0.5 0.5 0 0 0 ' + (2 * dy * clickableScalar) + ' ' + (-2 * dx * clickableScalar) + ' L ' + interpolation1Translated1.x + ' ' + interpolation1Translated1.y + ' z');
+                        labelLineClickableCap1HTML.setAttribute('d', paths.cap1Path);
                         labelLineClickableCap1HTML.setAttribute('id', '' + labelLineCap1ID);
                         labelLineClickableCap1HTML.setAttribute('onclick', 'XRNA.onClickLabel(this);');
-                        labelLineClickableCap1HTML.setAttribute('visibility', 'hidden');
+                        // labelLineClickableCap1HTML.setAttribute('visibility', 'hidden');
+                        labelLineClickableCap1HTML.setAttribute('fill', 'blue');
+                        // This is important in dragging elements around the scene.
+                        // Do not remove it.
+                        labelLineClickableCap1HTML.setAttribute('transform', ' ');
                         labelLineClickableCap1HTML.setAttribute('pointer-events', 'all');
                         labelLinesGroupHTML.appendChild(labelLineClickableCap1HTML);
                         boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(XRNA.getBoundingBox(labelLineClickableBodyHTML), labelLineBodyID));
                         boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(XRNA.getBoundingBox(labelLineClickableCap0HTML), labelLineCap0ID));
                         boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(XRNA.getBoundingBox(labelLineClickableCap1HTML), labelLineCap1ID));
-                        labelLineHTML.setAttribute('id', nucleotideID + ': Label Line #' + nucleotideIndex);
+                        labelLineHTML.setAttribute('id', XRNA.labelLineID(nucleotideID));
                         labelLineHTML.setAttribute('id', '' + labelLineID);
                         labelLineHTML.setAttribute('x1', '' + x0);
                         labelLineHTML.setAttribute('y1', '' + y0);
                         labelLineHTML.setAttribute('x2', '' + x1);
                         labelLineHTML.setAttribute('y2', '' + y1);
-                        labelLineHTML.setAttribute('stroke-width', '' + labelLine[4]);
+                        // This is used in dragging elements around the scene.
+                        // Do not remove it.
+                        labelLineHTML.setAttribute('transform', ' ');
+                        labelLineHTML.setAttribute('stroke-width', '' + labelLine.strokeWidth);
                         labelLineHTML.setAttribute('stroke', 'rgb(' + lineColor.red + ' ' + lineColor.green + ' ' + lineColor.blue + ')');
                         labelLineHTML.setAttribute('pointer-events', 'none');
                         labelLinesGroupHTML.appendChild(labelLineHTML);
@@ -969,19 +1305,19 @@ var XRNA = /** @class */ (function () {
                     if (nucleotide.labelContent) {
                         var labelContentHTML = document.createElementNS(svgNameSpaceURL, 'text');
                         labelContentHTML.setAttribute('id', XRNA.labelContentID(nucleotideID));
-                        var labelContent = nucleotide.labelContent, x = nucleotideBoundingBoxCenterX + labelContent[0];
+                        var labelContent = nucleotide.labelContent, x = nucleotideBoundingBoxCenterX + labelContent.x;
                         labelContentHTML.setAttribute('x', '' + x);
-                        var y = nucleotideBoundingBoxCenterY + labelContent[1];
+                        var y = nucleotideBoundingBoxCenterY + labelContent.y;
                         labelContentHTML.setAttribute('y', '' + y);
-                        labelContentHTML.textContent = labelContent[2];
-                        var labelColor = labelContent[4];
+                        labelContentHTML.textContent = labelContent.content;
+                        var labelColor = labelContent.color;
                         labelContentHTML.setAttribute('stroke', 'rgb(' + labelColor.red + ' ' + labelColor.green + ' ' + labelColor.blue + ')');
-                        var labelFont = labelContent[3], labelID = XRNA.labelContentID(nucleotideID);
+                        var labelFont = labelContent.font, labelID = XRNA.labelContentID(nucleotideID);
                         labelContentHTML.setAttribute('id', labelID);
-                        labelContentHTML.setAttribute('font-size', '' + labelFont[0]);
-                        labelContentHTML.setAttribute('font-family', labelFont[1]);
-                        labelContentHTML.setAttribute('font-style', labelFont[2]);
-                        labelContentHTML.setAttribute('font-weight', labelFont[3]);
+                        labelContentHTML.setAttribute('font-size', '' + labelFont.size);
+                        labelContentHTML.setAttribute('font-family', labelFont.family);
+                        labelContentHTML.setAttribute('font-style', labelFont.style);
+                        labelContentHTML.setAttribute('font-weight', labelFont.weight);
                         labelContentHTML.setAttribute('transform', XRNA.invertYTransform(y));
                         labelContentHTML.setAttribute('onclick', 'XRNA.onClickLabel(this)');
                         labelContentsGroupHTML.appendChild(labelContentHTML);
@@ -992,15 +1328,7 @@ var XRNA = /** @class */ (function () {
                         // Recalculate the bounding box. Manual correction appears ineffective.
                         boundingBox = XRNA.getBoundingBox(labelContentHTML);
                         boundingBoxes.push(boundingBox);
-                        var boundingBoxHTML_1 = document.createElementNS(svgNameSpaceURL, 'rect');
-                        boundingBoxHTML_1.setAttribute('id', XRNA.boundingBoxID(labelID));
-                        boundingBoxHTML_1.setAttribute('x', '' + boundingBox.x);
-                        boundingBoxHTML_1.setAttribute('y', '' + boundingBox.y);
-                        boundingBoxHTML_1.setAttribute('width', '' + boundingBox.width);
-                        boundingBoxHTML_1.setAttribute('height', '' + boundingBox.height);
-                        boundingBoxHTML_1.setAttribute('stroke', 'none');
-                        boundingBoxHTML_1.setAttribute('fill', 'none');
-                        boundingBoxesHTML.appendChild(boundingBoxHTML_1);
+                        boundingBoxesHTML.appendChild(XRNA.getBoundingBoxHTML(boundingBox, labelID));
                     }
                     // Only render the bond lines once.
                     // If we use the nucleotide with the greater index, we can can reference the other nucleotide's HTML.
@@ -1081,14 +1409,23 @@ var XRNA = /** @class */ (function () {
     XRNA.sceneDressingData = {
         maximumZoom: 48,
         minimumZoom: -48,
-        originX: 0,
-        originY: 0,
-        // zoom is on a linear scale. It is converted to exponential before use.
+        // zoom is on a linear scale. It is converted to an exponential scale before use.
         zoom: 0,
-        cacheOriginX: 0,
-        cacheOriginY: 0,
-        onDragX: 0,
-        onDragY: 0
+        scale: 1,
+        origin: {
+            x: 0,
+            y: 0
+        },
+        dragCoordinates: {
+            cacheOrigin: {
+                x: 0,
+                y: 0
+            },
+            origin: {
+                x: 0,
+                y: 0
+            }
+        }
     };
     XRNA.inputParserDictionary = {
         'xml': XRNA.parseXML,
@@ -1679,8 +2016,19 @@ var XRNA = /** @class */ (function () {
     // buttonIndex is always equal to the current mouse button(s) (see BUTTON_INDEX) depressed within the canvas.
     XRNA.buttonIndex = BUTTON_INDEX.NONE;
     XRNA.selection = {
-        boundingBoxHTMLs: new Array(),
-        selected: new Array()
+        selected: new Array(),
+        dx: 0,
+        dy: 0,
+        dragCoordinates: {
+            origin: {
+                x: 0,
+                y: 0
+            },
+            cacheOrigin: {
+                x: 0,
+                y: 0
+            }
+        }
     };
     return XRNA;
 }());
