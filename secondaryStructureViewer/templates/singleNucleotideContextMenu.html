@@ -1,0 +1,22 @@
+{% csrf_token %}
+{% load static %}
+<html>
+    <head>
+        <script type="text/javascript">
+            var
+                exports={},
+                rnaComplexIndex = parseInt("{{ rnaComplexIndex }}"),
+                rnaMoleculeIndex = parseInt("{{ rnaMoleculeIndex }}"),
+                nucleotideIndex = parseInt("{{ nucleotideIndex }}");
+            console.log(rnaComplexIndex + " " + rnaMoleculeIndex + " " + nucleotideIndex);
+        </script>
+		<script type="text/javascript" src={% static 'scripts/XRNA.js' %}></script>
+        <script type="text/javascript">
+            // let
+            //     nucleotide = XRNA.getNucleotide(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex);
+        </script>
+    </head>
+    <body>
+
+    </body>
+</html>

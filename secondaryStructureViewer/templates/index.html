@@ -1,0 +1,111 @@
+<html>
+    <head>
+		{% csrf_token %}
+		{% load static %}
+
+        <link rel="shortcut icon" href="#">
+        <style>
+            body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            button {
+                font-size:12;
+            }
+            select {
+                font-size:12;
+            }
+            input {
+                font-size:12;
+            }
+            div {
+                font-size:12;
+            }
+            .tabControls {
+                position:absolute;
+                top:0px;
+                left:0px;
+                height:75px;
+                background-color:inherit;
+            }
+            .viewControls {
+                position:absolute;
+                top:75px;
+                left:0px;
+                height:20px;
+                background-color:inherit;
+            }
+        </style>
+
+        <script>
+            var exports={};
+
+            function rgbShadeInverter(rgbString) {
+                let rgbStrings = rgbString.match(/\d+/g);
+                let rgb = [parseInt(rgbStrings[0]), parseInt(rgbStrings[1]), parseInt(rgbStrings[2])];
+                return "rgb(" + (255 - rgb[0]) + " " + (255 - rgb[1]) + " " + (255 - rgb[2]) + ")";
+            }
+
+            function darkModeHelper() {
+                ["canvas"].forEach(id => {
+                    let style = document.getElementById(id).style;
+                    ["background-color"].forEach(propertyName => {
+                        let propertyValue = style.getPropertyValue(propertyName);
+                        if (propertyValue) {
+                            style.setProperty(propertyName, rgbShadeInverter(propertyValue));
+                        }
+                    });
+                });
+            }
+        </script>
+		<script type="text/javascript" src={% static 'scripts/XRNA.js' %}></script>
+    </head>
+    <body>
+        <svg style="background-color:rgb(230, 230, 230);width:100%;height:120px;"></svg>
+        <div id="controls" class="controls" style='color:rgb(0, 0, 0);'>
+            <div class='tabControls'>
+                <button onclick='["Edit Tab", "Format Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("IO Tab").style.display="block";'>File import / export</button>
+                <button onclick='["IO Tab", "Format Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Edit Tab").style.display="block";'>Edit</button>
+                <button onclick='["IO Tab", "Edit Tab"].forEach(id => {document.getElementById(id).style.display="none"}); document.getElementById("Format Tab").style.display="block";'>Format</button>
+                <!-- <input id='dark mode' type='checkbox' onchange='darkModeHelper()'>Dark Mode</input> -->
+                <div id='IO Tab'>
+                    <label id='input label' for="input">Choose an input file:</label>
+                    <input type="file" id="input" onchange="
+                        let split = this.value.split('.');
+                        let path = split[0];
+                        document.getElementById('output file name').value = path.substring(path.lastIndexOf('\\') + 1);
+                        XRNA.handleInputFile(this.files[0], split[1]);">
+                    </input>
+                    <br>
+                    <label for="output file name">Create an output file:</label>
+                    <input type="text" id="output file name"></input>
+                    <select id="output file extension"></select>
+                    <button onclick="XRNA.handleOutputUrl(document.getElementById('output file name').value + document.getElementById('output file extension').value)">Download</button>
+                </div>
+                <div id='Edit Tab' style="display:none;">
+                    Place Editing Tools Here!
+                </div>
+                <div id='Format Tab' style="display:none;">
+                    Place Formatting Tools Here!
+                </div>
+            </div>
+            <div class='viewControls'>
+                Selection constraint: <select id='selection constraint'></select>
+                Zoom: -<input id='zoom slider' type='range' value='0' oninput='XRNA.setZoom(value);' />+
+                <br>
+                <button onclick="XRNA.resetView();">Reset View</button>
+            </div>
+        </div>
+        <div id='contextMenu' style='background-color:rgb(230 230 230); border-color:black; border-style:solid; border-width:3px; display:block; z-index:1; position:absolute; display:none' draggable='true'>
+        </div>
+        <svg id="canvas" style="width: 100%; height: calc(100% - 120px); /* shape-rendering: optimizeSpeed; */ /* text-rendering: optimizeSpeed; */ position:absolute; top:120px; z-index:0" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve">
+            <rect id='background' width='100%' height='100%' fill='white'></rect>
+        </svg>
+        <script type="text/JavaScript">
+            XRNA.main(null, [], false);
+            // document.getElementById('dark mode').click();
+        </script>
+    </body>
+</html>
