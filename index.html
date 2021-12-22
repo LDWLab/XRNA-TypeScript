@@ -1,0 +1,228 @@
+<html>
+    <head>
+        <link rel="shortcut icon" href="#">
+        <script>
+            var
+                exports = {},
+                canvasTop = 140;
+
+            function handleInputFile(inputFileHandlerHTML) {
+                if (inputFileHandlerHTML.value) {
+                    let
+                        fullFileName = inputFileHandlerHTML.value.substring(inputFileHandlerHTML.value.lastIndexOf("\\") + 1),
+                        lastIndexOfPeriod = fullFileName.lastIndexOf("."),
+                        fileName = fullFileName.substring(0, lastIndexOfPeriod),
+                        fileExtension = fullFileName.substring(lastIndexOfPeriod + 1);
+                    document.getElementById("outputFileName").value = fileName
+                    XRNA.handleInputFile({
+                        blob : inputFileHandlerHTML.files[0],
+                        extension : fileExtension
+                    })
+                }
+            }
+
+            function handleRNAComplexSelection(rnaComplexIndex, ...rnaMoleculeSelectors) {
+                let
+                    rnaComplex = XRNA.rnaComplexes[rnaComplexIndex];
+                rnaMoleculeSelectors.forEach(rnaMoleculeSelector => {
+                    for (let i = 0; i < rnaComplex.rnaMolecules.length; i++) {
+                        rnaMoleculeSelector.appendChild(new Option(rnaComplex.rnaMolecules[i].name, "" + i));
+                    }
+                    rnaMoleculeSelector.selectedIndex = -1;
+                });
+            }
+
+            function handleNucleotideIndexSelection(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, otherRNAMoleculeSelector, otherNucleotideIndexInput) {
+                if (!otherNucleotideIndexInput.value) {
+                    let
+                        rnaMolecule = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[rnaMoleculeIndex],
+                        basePairIndex = rnaMolecule.nucleotides[nucleotideIndex - rnaMolecule.firstNucleotideIndex].basePairIndex;
+                    if (basePairIndex > 0) {
+                        handleRNAComplexSelection(rnaComplexIndex, otherRNAMoleculeSelector);
+                        otherRNAMoleculeSelector[rnaMoleculeIndex].selected = true;
+                        otherNucleotideIndexInput.value = "" + (basePairIndex + rnaMolecule.firstNucleotideIndex);
+                    }
+                }
+            }
+
+            function handleNucleotideBondUpdate(rnaComplexIndex, rnaMoleculeIndex0, nucleotideIndex0AsString, rnaMoleculeIndex1, nucleotideIndex1AsString) {
+                let
+                    nucleotideIndex0AsStringFlag = nucleotideIndex0AsString == "",
+                    nucleotideIndex1AsStringFlag = nucleotideIndex1AsString == "",
+                    rnaMolecules = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules;
+                if (nucleotideIndex0AsStringFlag && nucleotideIndex1AsStringFlag) {
+                    // Do nothing.
+                } else if (nucleotideIndex0AsStringFlag && !nucleotideIndex1AsStringFlag) {
+                    let
+                        rnaMolecule = rnaMolecules[rnaMoleculeIndex1],
+                        inputNucleotideIndex = parseInt(nucleotideIndex1AsString),
+                        nucleotideIndex = inputNucleotideIndex - rnaMolecule.firstNucleotideIndex,
+                        nucleotides = rnaMolecule.nucleotides,
+                        nucleotide = nucleotides[nucleotideIndex];
+                    if (nucleotideIndex < 0 || nucleotideIndex >= nucleotides.length) {
+                        alert("RNA Complex " + rnaComplex.name + ": RNA Molecule " + rnaMolecule0.name + ": nucleotide index " + inputNucleotideIndex0 + " is out of bounds ([" + rnaMolecule0.firstNucleotideIndex + ", " + (rnaMolecule0.firstNucleotideIndex + nucleotides0.length) + "])");
+                        return;
+                    }
+                    if (nucleotide.basePairIndex >= 0) {
+                        XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex1, nucleotideIndex, rnaMoleculeIndex1, nucleotide.basePairIndex);
+                    }
+                } else if (!nucleotideIndex0AsStringFlag && nucleotideIndex1AsStringFlag) {
+                    let
+                        rnaMolecule = rnaMolecules[rnaMoleculeIndex0],
+                        inputNucleotideIndex = parseInt(nucleotideIndex0AsString),
+                        nucleotideIndex = inputNucleotideIndex - rnaMolecule.firstNucleotideIndex,
+                        nucleotides = rnaMolecule.nucleotides,
+                        nucleotide = nucleotides[nucleotideIndex];
+                    if (nucleotideIndex < 0 || nucleotideIndex >= nucleotides.length) {
+                        alert("RNA Complex " + rnaComplex.name + ": RNA Molecule " + rnaMolecule0.name + ": nucleotide index " + inputNucleotideIndex0 + " is out of bounds ([" + rnaMolecule0.firstNucleotideIndex + ", " + (rnaMolecule0.firstNucleotideIndex + nucleotides0.length) + "])");
+                        return;
+                    }
+                    if (nucleotide.basePairIndex >= 0) {
+                        XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex0, nucleotideIndex, rnaMoleculeIndex0, nucleotide.basePairIndex);
+                    }
+                } else { // !nucleotideIndex0AsStringFlag && !nucleotideIndex1AsStringFlag
+                    let
+                        rnaMolecule0 = rnaMolecules[rnaMoleculeIndex0],
+                        rnaMolecule1 = rnaMolecules[rnaMoleculeIndex1],
+                        nucleotides0 = rnaMolecule0.nucleotides,
+                        nucleotides1 = rnaMolecule1.nucleotides,
+                        inputNucleotideIndex0 = parseInt(nucleotideIndex0AsString),
+                        inputNucleotideIndex1 = parseInt(nucleotideIndex1AsString),
+                        nucleotideIndex0 = inputNucleotideIndex0 - rnaMolecule0.firstNucleotideIndex,
+                        nucleotideIndex1 = inputNucleotideIndex1 - rnaMolecule1.firstNucleotideIndex;
+                    if (nucleotideIndex0 < 0 || nucleotideIndex0 >= nucleotides0.length) {
+                        alert("RNA Complex " + rnaComplex.name + ": RNA Molecule " + rnaMolecule0.name + ": nucleotide index " + inputNucleotideIndex0 + " is out of bounds ([" + rnaMolecule0.firstNucleotideIndex + ", " + (rnaMolecule0.firstNucleotideIndex + nucleotides0.length) + "])");
+                        return;
+                    }
+                    if (nucleotideIndex1 < 0 || nucleotideIndex1 >= nucleotides1.length) {
+                        alert("RNA Complex " + rnaComplex.name + ": RNA Molecule " + rnaMolecule1.name + ": nucleotide index " + inputNucleotideIndex1 + " is out of bounds ([" + rnaMolecule1.firstNucleotideIndex + ", " + (rnaMolecule1.firstNucleotideIndex + nucleotides1.length) + "])");
+                        return;
+                    }
+                    let
+                        nucleotide0 = nucleotides0[nucleotideIndex0],
+                        nucleotide1 = nucleotides1[nucleotideIndex1];
+                    if (nucleotide0.basePairIndex >= 0) {
+                        XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex0, nucleotideIndex0, rnaMoleculeIndex0, nucleotide0.basePairIndex);
+                    }
+                    if (nucleotide1.basePairIndex >= 0) {
+                        XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex1, nucleotideIndex1, rnaMoleculeIndex1, nucleotide1.basePairIndex);
+                    }
+                    XRNA.createNucleotideBond(rnaComplexIndex, rnaMoleculeIndex0, nucleotideIndex0, rnaMoleculeIndex1, nucleotideIndex1);
+                }
+            }
+        </script>
+        <script src=".\XRNA.js" type="text/javascript"></script>
+        <style>
+            :root {
+                --controlsHeight:140px;
+            }
+            body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            button {
+                font-size:12;
+            }
+            select {
+                font-size:12;
+            }
+            input {
+                font-size:12;
+            }
+            div {
+                font-size:12;
+            }
+            .controls {
+                width:100%;
+                height:100%;
+                background-color:rgb(230, 230, 230);
+                background-size:cover;
+            }
+            .tabControls {
+                position:absolute;
+                top:0px;
+                left:0px;
+                height:75px;
+                background-color:inherit;
+            }
+            .viewControls {
+                position:absolute;
+                top:95px;
+                left:0px;
+                height:20px;
+                background-color:inherit;
+            }
+            .canvas {
+                width: 100%;
+                height: calc(100% - var(--controlsHeight));
+                /* shape-rendering: optimizeSpeed; */
+                /* text-rendering: optimizeSpeed; */
+                position:absolute;
+                top:var(--controlsHeight);
+                z-index:0;
+                background-color:white;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- <svg style="background-color:rgb(230, 230, 230);width:100%;height:var(--controlsHeight);"></svg> -->
+        <div id="controls" class="controls" style="color:rgb(0, 0, 0);">
+            <div class="tabControls">
+                <button onclick="['editTab', 'formatTab', 'settingsTab'].forEach(id => {document.getElementById(id).style.display='none';}); document.getElementById('ioTab').style.display='block';">File import / export</button>
+                <button onclick="['ioTab', 'formatTab', 'settingsTab'].forEach(id => {document.getElementById(id).style.display='none';}); document.getElementById('editTab').style.display='block';">Edit</button>
+                <button onclick="['ioTab', 'editTab', 'settingsTab'].forEach(id => {document.getElementById(id).style.display='none';}); document.getElementById('formatTab').style.display='block';">Format</button>
+                <button onclick="['ioTab', 'editTab', 'formatTab'].forEach(id => {document.getElementById(id).style.display='none';}); document.getElementById('settingsTab').style.display='block';">Settings</button>
+                <div id="ioTab" style="display:block">
+                    <label id="input label" for="input">Choose an input file:</label>
+                    <input type="file" id="inputFileHandler" onchange="handleInputFile(this)">
+                    </input>
+                    <br>
+                    <label for="outputFileName">Create an output file:</label>
+                    <input type="text" id="outputFileName">
+                    <select id="outputFileExtensionSelector" onchange="XRNA.updateSelectedOutputFileExtension(this.value);"></select>
+                    <div id="outputFileSpecificationsDiv" style="display:inline;"></div>
+                    <button id="outputFileDownloadButton" onclick="XRNA.handleOutputUrl(document.getElementById('outputFileName').value + '.' + document.getElementById('outputFileExtensionSelector').value)">Download</button>
+                </div>
+                <div id="editTab" style="display:none;">
+                </div>
+                <div id="formatTab" style="display:none;">
+                    Add or remove nucleotide bond between:
+                    <br>
+                    RNA complex:<select id="rnaComplexSelector" onchange="handleRNAComplexSelection(parseInt(this.value), document.getElementById('rnaMoleculeSelector0'), document.getElementById('rnaMoleculeSelector1'))"></select>
+                    RNA molecule:<select id="rnaMoleculeSelector0"></select>
+                    Nucleotide index:<input id="nucleotideIndexInput0" onchange="handleNucleotideIndexSelection(parseInt(document.getElementById('rnaComplexSelector').value), parseInt(document.getElementById('rnaMoleculeSelector0').value), parseInt(this.value), document.getElementById('rnaMoleculeSelector1'), document.getElementById('nucleotideIndexInput1'))"></input>
+                     and 
+                    RNA molecule:<select id="rnaMoleculeSelector1"></select>
+                    Nucleotide index:<input id="nucleotideIndexInput1" onchange="handleNucleotideIndexSelection(parseInt(document.getElementById('rnaComplexSelector').value), parseInt(document.getElementById('rnaMoleculeSelector1').value), parseInt(this.value), document.getElementById('rnaMoleculeSelector0'), document.getElementById('nucleotideIndexInput0'))"></input>
+                    <button onclick="handleNucleotideBondUpdate(parseInt(document.getElementById('rnaComplexSelector').value), parseInt(document.getElementById('rnaMoleculeSelector0').value), document.getElementById('nucleotideIndexInput0').value, parseInt(document.getElementById('rnaMoleculeSelector1').value), document.getElementById('nucleotideIndexInput1').value)">Update</button>
+                </div>
+                <div id="settingsTab" style="display:none;">
+                    <!-- Dynamically re-position labels: <input type="checkbox" checked="true"></input>
+                    <br>
+                    Choose configuration file: <input type="file" accept=".config, .json"></input>
+                    <button>Download</button>
+                    <br>
+                    Dark Mode: <input id="dark mode" type="checkbox" onchange="darkModeHelper()"></input> -->
+                </div>
+            </div>
+            <div class="viewControls">
+                Selection constraint: <select id="selectionConstraint"></select>
+                <br>
+                Zoom: <input id="zoomSlider" type="range" value="0" oninput="XRNA.setZoom(value);" draggable="false"/>
+                <button onclick="XRNA.resetView();">Reset View</button>
+            </div>
+        </div>
+        
+        <div id="contextMenu" style="background-color:rgb(255 255 255); border-color:black; border-style:solid; border-width:3px; display:block; z-index:1; position:absolute; display:none" draggable="false" oncontextmenu="return false;">
+        </div>
+        <svg id="canvas" class="canvas" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve">
+        </svg>
+    </body>
+    <footer>
+        <script>
+            XRNA.main(null, [], false);
+        </script>
+    </footer>
+</html>
