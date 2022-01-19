@@ -185,6 +185,9 @@
                     <div id="outputFileSpecificationsDiv" style="display:inline;"></div>
                     <button id="outputFileDownloadButton" onclick="XRNA.handleOutputUrl(document.getElementById('outputFileName').value + '.' + document.getElementById('outputFileExtensionSelector').value)">Download</button>
                 </div>
+                <div id="annotateTab" style="display:none;">
+                    
+                </div>
                 <div id="editTab" style="display:none;">
                 </div>
                 <div id="formatTab" style="display:none;">
@@ -215,7 +218,7 @@
             </div>
         </div>
         
-        <div id="contextMenu" style="background-color:rgb(255 255 255); border-color:black; border-style:solid; border-width:3px; display:block; z-index:1; position:absolute; display:none" draggable="false" oncontextmenu="return false;">
+        <div id="contextMenu" style="background-color:rgb(255 255 255); border-color:black; border-style:solid; border-width:3px; display:block; z-index:1; position:absolute; display:none; overflow:scroll; resize:both;" draggable="false" oncontextmenu="return false;">
         </div>
         <svg id="canvas" class="canvas" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve">
         </svg>
