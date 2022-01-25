@@ -1,7 +1,9 @@
 const svgNameSpaceURL = "http://www.w3.org/2000/svg";
 const pixelRegex = /^(-?\d+)(?:px)?/;
-
+const roundingNumberOfDecimalPlaces = 2;
 const DEFAULT_STROKE_WIDTH = 0.2;
+const radiansToDegreesFactor = 180.0 / Math.PI;
+const degreesToRadiansFactor = Math.PI / 180.0;
 
 abstract class SelectionConstraint {
     abstract approveSelectedNucleotideForSelection(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : boolean;
@@ -257,18 +259,12 @@ export class VectorOperations2D {
         return v0.x * v1.x + v0.y * v1.y;
     }
 
-    public static normalizedScalarProjection(v0 : Vector2D, v1 : Vector2D) : number {
-        // a^k * b^k == (a * b)^k
-        // sqrt(a * a) * sqrt(b * b) == sqrt(a * a * b * b)
-        return VectorOperations2D.scalarProjection(v0, v1) / Math.sqrt(VectorOperations2D.magnitudeSquared(v0) * VectorOperations2D.magnitudeSquared(v1));
-    }
-
     public static scalarProjection(v0 : Vector2D, v1 : Vector2D) : number {
-        return VectorOperations2D.dotProduct(v0, v1);
+        return VectorOperations2D.dotProduct(v0, VectorOperations2D.normalize(v1));
     }
 
     public static vectorProjection(v0 : Vector2D, v1 : Vector2D) : Vector2D {
-        return VectorOperations2D.scaleUp(v1, VectorOperations2D.normalizedScalarProjection(v0, v1));
+        return VectorOperations2D.scaleUp(v1, VectorOperations2D.dotProduct(v0, v1) / VectorOperations2D.dotProduct(v1, v1));
     }
 
     public static vectorRejection(v0 : Vector2D, v1 : Vector2D) : Vector2D {
@@ -402,6 +398,55 @@ export class VectorOperations2D {
         }
     }
 
+    public static lineCircleIntersectionAsInterpolationFactors(line : Line2D, circle : Circle) : Array<number> {
+        // Line(t) == v0 + dv * t
+        // Circle : ||v - c|| == r
+        //       => (v - c)^2 == r^2
+        // Intersection : (v0 + dv * t - c)^2 == r^2
+        //             => (v0 - c + dv * t)^2 == r^2
+        //             => (v0 - c)^2 + (t)(2)(dv)(v0 - c) + (t^2)(dv^2) == r^2
+        //             => (v0 - c)^2 - r^2 + (t)(2)(dv)(v0 - c) + (t^2)(dv^2) == 0
+        // Quadratic Formula : (t^2) * a + (t) * b + c == 0
+        //                  => t == (-b +- sqrt(b^2 - 4ac)) / (2a)
+        //                  => t == -b / (2a) +- sqrt((b / (2a))^2 - c / a)
+        //                  => a == dv^2
+        //                  => b == (2)(dv)(v0 - c)
+        //                  => c == (v0 - c)^2 - r^2
+        //                  => b / (2a) == (dv)(v0 - c) / (dv^2) == (dv)(v0 - c) / a
+        let
+            dv = VectorOperations2D.subtract(line.v1, line.v0),
+            oneOverA = 1.0 / VectorOperations2D.magnitudeSquared(dv),
+            v0MinusCenter = VectorOperations2D.subtract(line.v0, circle.center),
+            bOverTwoA = VectorOperations2D.dotProduct(dv, v0MinusCenter) * oneOverA,
+            discriminant = bOverTwoA * bOverTwoA - (VectorOperations2D.magnitudeSquared(v0MinusCenter) - circle.radius * circle.radius) * oneOverA;
+        switch (Utils.sign(discriminant)) {
+            case -1:
+                return [];
+            case 0:
+                return [-bOverTwoA];
+            case 1:
+                let
+                    negativeBOverTwoA = -bOverTwoA,
+                    sqrtDiscriminant = Math.sqrt(discriminant);
+                return [
+                    // List in increasing order.
+                    negativeBOverTwoA - sqrtDiscriminant,
+                    negativeBOverTwoA + sqrtDiscriminant 
+                ];
+        }
+    }
+
+    public static lineCircleIntersection(line : Line2D, circle : Circle) : Array<Vector2D> {
+        let
+            interpolationFactors = VectorOperations2D.lineCircleIntersectionAsInterpolationFactors(line, circle),
+            intersection = new Array<Vector2D>();
+        interpolationFactors.forEach(interpolationFactor => intersection.push({
+            x : Utils.linearlyInterpolate(line.v0.x, line.v1.x, interpolationFactor),
+            y : Utils.linearlyInterpolate(line.v0.y, line.v1.y, interpolationFactor)
+        }));
+        return intersection;
+    }
+
     public static unsignedAngleBetweenVectors(v0 : Vector2D, v1 : Vector2D) : number {
         // a * b == cos(theta) * ||a|| * ||b||
         // a * b / (||a|| * ||b||) == cos(theta)
@@ -446,6 +491,13 @@ export class AffineMatrix3D {
 
     public static scale(sx : number, sy : number) : AffineMatrix3D {
         return new AffineMatrix3D(sx, 0, 0, 0, sy, 0, true);
+    }
+
+    public static rotate(theta : number) : AffineMatrix3D {
+        let
+            sin = Math.sin(theta),
+            cos = Math.cos(theta);
+        return new AffineMatrix3D(cos, -sin, 0, sin, cos, 0, true);
     }
 
     public static parseTransform(transform : string) : AffineMatrix3D {
@@ -992,8 +1044,8 @@ export class XRNA {
                 let
                     previousNucleotideDistanceHTML = null,
                     nextNucleotideDistanceHTML = null,
-                    distanceToPreviousNucleotideTextContentHelper = () => "Distance to previous nucleotide: " + VectorOperations2D.distance(nucleotide.position, nucleotides[nucleotideIndex - 1].position).toFixed(2),
-                    distanceToNextNucleotideTextContentHelper = () => "Distance to next nucleotide: " + VectorOperations2D.distance(nucleotide.position, nucleotides[nucleotideIndex + 1].position).toFixed(2);
+                    distanceToPreviousNucleotideTextContentHelper = () => "Distance to previous nucleotide: " + VectorOperations2D.distance(nucleotide.position, nucleotides[nucleotideIndex - 1].position).toFixed(roundingNumberOfDecimalPlaces),
+                    distanceToNextNucleotideTextContentHelper = () => "Distance to next nucleotide: " + VectorOperations2D.distance(nucleotide.position, nucleotides[nucleotideIndex + 1].position).toFixed(roundingNumberOfDecimalPlaces);
                 if (nucleotideIndex > 0) {
                     previousNucleotideDistanceHTML = createTextElement(distanceToPreviousNucleotideTextContentHelper());
                     XRNA.contextMenuHTML.appendChild(previousNucleotideDistanceHTML);
@@ -1004,7 +1056,7 @@ export class XRNA {
                     XRNA.contextMenuHTML.appendChild(nextNucleotideDistanceHTML);
                     XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 }
-                XRNA.contextMenuHTML.appendChild(createTextElement("X:"));
+                XRNA.contextMenuHTML.appendChild(createTextElement("x:"));
                 let
                     xInputHTML = document.createElement("input"),
                     yInputHTML = document.createElement("input"),
@@ -1026,7 +1078,7 @@ export class XRNA {
                     }
                 };
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
-                XRNA.contextMenuHTML.appendChild(createTextElement("Y:"));
+                XRNA.contextMenuHTML.appendChild(createTextElement("y:"));
                 XRNA.contextMenuHTML.appendChild(yInputHTML);
                 yInputHTML.setAttribute("type", "text");
                 yInputHTML.value = "" + nucleotide.position.y;
@@ -1470,19 +1522,14 @@ export class XRNA {
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 htmlLabelElement = document.createElement("label");
-                htmlLabelElement.textContent = "Use default diameter (" + XRNA.hairpinLoopDiameter + ")";
+                htmlLabelElement.textContent = "Radius: ";
                 XRNA.contextMenuHTML.appendChild(htmlLabelElement);
-                let
-                    htmlNormalizeArcCheckboxElement = document.createElement("input");
-                htmlNormalizeArcCheckboxElement.checked = false;
-                htmlNormalizeArcCheckboxElement.type = "checkbox";
-                XRNA.contextMenuHTML.appendChild(htmlNormalizeArcCheckboxElement);
-                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 let
                     precedingNucleotidePosition = rnaMolecule.nucleotides[precedingNucleotideIndex].position,
                     succedingNucleotidePosition = rnaMolecule.nucleotides[succedingNucleotideIndex].position,
                     boundingNucleotidesAveragePosition = VectorOperations2D.scaleUp(VectorOperations2D.add(precedingNucleotidePosition, succedingNucleotidePosition), 0.5),
-                    candidateCircleDefiningCenters = Array<Vector2D>();
+                    candidateCircleDefiningCenters = Array<Vector2D>(),
+                    radiusInputElement = document.createElement("input");
                 selectedNucleotideIndices.forEach(selectedNucleotideIndicesTuple => {
                     let
                         center : Vector2D;
@@ -1496,24 +1543,50 @@ export class XRNA {
                 });
                 let
                     averageCenterX = 0,
-                    averageCenterY = 0;
+                    averageCenterY = 0,
+                    averageRadius = 0;
                 candidateCircleDefiningCenters.forEach(candidateArcDefiningCircle => {
                     averageCenterX += candidateArcDefiningCircle.x;
                     averageCenterY += candidateArcDefiningCircle.y;
+                    averageRadius += VectorOperations2D.distance(precedingNucleotidePosition, candidateArcDefiningCircle);
                 });
                 let
-                    numberOfNucleotidesReciprocal = 1.0 / selectedNucleotideIndices.length;
+                    numberOfNucleotidesReciprocal = 1.0 / selectedNucleotideIndices.length,
+                    projectedDistanceInputHTMLElement : HTMLInputElement,
+                    originalCrossProductDirection : number;
                 averageCenterX *= numberOfNucleotidesReciprocal;
                 averageCenterY *= numberOfNucleotidesReciprocal;
+                averageRadius *= numberOfNucleotidesReciprocal;
+                radiusInputElement.step = "0.1";
+                radiusInputElement.type = "number";
+                radiusInputElement.min = "" + VectorOperations2D.distance(precedingNucleotidePosition, succedingNucleotidePosition) * 0.5;
+                radiusInputElement.value = "" + averageRadius.toFixed(roundingNumberOfDecimalPlaces);
+                radiusInputElement.onchange = () => {
+                    let
+                        projectedDistance = parseFloat(projectedDistanceInputHTMLElement.value),
+                        sign = Utils.sign(projectedDistance);
+                    projectedDistanceInputHTMLElement.value = "" + VectorOperations2D.lineCircleIntersectionAsInterpolationFactors({
+                        v0 : boundingNucleotidesAveragePosition,
+                        v1 : VectorOperations2D.add(boundingNucleotidesAveragePosition, normalOrthogonalDirection)
+                    }, {
+                        center : VectorOperations2D.add(boundingNucleotidesAveragePosition, VectorOperations2D.scaleUp(normalOrthogonalDirection, projectedDistance)),
+                        radius : parseFloat(radiusInputElement.value)
+                        // For a negative sign, use the lesser interpolation factor.
+                        // For a positive sign, use the greater interpolation factor.
+                    })[sign == -1 ? 0 : sign == 0 ? originalCrossProductDirection : 1].toFixed(roundingNumberOfDecimalPlaces);
+                };
+                radiusInputElement.disabled = true;
+                XRNA.contextMenuHTML.appendChild(radiusInputElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 let
                     averageCenter = {
                         x : averageCenterX,
                         y : averageCenterY
                     },
                     normalOrthogonalDirection = VectorOperations2D.orthogonalize(VectorOperations2D.normalize(VectorOperations2D.subtract(succedingNucleotidePosition, precedingNucleotidePosition))),
-                    projectedDistance = VectorOperations2D.scalarProjection(VectorOperations2D.subtract(averageCenter, boundingNucleotidesAveragePosition), normalOrthogonalDirection),
+                    projectedDistance = VectorOperations2D.dotProduct(VectorOperations2D.subtract(averageCenter, boundingNucleotidesAveragePosition), normalOrthogonalDirection);
                     // Values: -1, 1.
-                    originalCrossProductDirection = Utils.sign(VectorOperations2D.crossProduct2D(VectorOperations2D.subtract(succedingNucleotidePosition, averageCenter), VectorOperations2D.subtract(precedingNucleotidePosition, averageCenter)));
+                originalCrossProductDirection = Utils.sign(VectorOperations2D.crossProduct2D(VectorOperations2D.subtract(succedingNucleotidePosition, averageCenter), VectorOperations2D.subtract(precedingNucleotidePosition, averageCenter)));
                 if (originalCrossProductDirection == 0) {
                     // Choose an arbitrary starting direction.
                     // If desired, users may invert it using the "flip button".
@@ -1522,11 +1595,13 @@ export class XRNA {
                 htmlLabelElement = document.createElement("label");
                 htmlLabelElement.textContent = "Signed distance from bounding nucleotides: ";
                 XRNA.contextMenuHTML.appendChild(htmlLabelElement);
-                let
-                    projectedDistanceInputHTMLElement = document.createElement("input");
+                projectedDistanceInputHTMLElement = document.createElement("input");
                 projectedDistanceInputHTMLElement.type = "number";
                 projectedDistanceInputHTMLElement.step = "0.1";
-                projectedDistanceInputHTMLElement.value = "" + projectedDistance;
+                projectedDistanceInputHTMLElement.value = "" + projectedDistance.toFixed(roundingNumberOfDecimalPlaces);
+                projectedDistanceInputHTMLElement.onchange = () => {
+                    radiusInputElement.value = "" + VectorOperations2D.distance(precedingNucleotidePosition, VectorOperations2D.add(boundingNucleotidesAveragePosition, VectorOperations2D.scaleUp(normalOrthogonalDirection, parseFloat(projectedDistanceInputHTMLElement.value)))).toFixed(roundingNumberOfDecimalPlaces);
+                };
                 XRNA.contextMenuHTML.appendChild(projectedDistanceInputHTMLElement);
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 let
@@ -1568,14 +1643,14 @@ export class XRNA {
                 XRNA.contextMenuHTML.appendChild(htmlNormalizeArcButtonElement);
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 let
-                    flipNucleotidesHTMLButtonElement = document.createElement("button");
-                flipNucleotidesHTMLButtonElement.textContent = "Flip nucleotides";
-                flipNucleotidesHTMLButtonElement.onclick = () => {
+                    reflectNucleotidesHTMLButtonElement = document.createElement("button");
+                reflectNucleotidesHTMLButtonElement.textContent = "Flip single strand";
+                reflectNucleotidesHTMLButtonElement.onclick = () => {
                     originalCrossProductDirection *= -1;
                     projectedDistanceInputHTMLElement.value = "" + -parseFloat(projectedDistanceInputHTMLElement.value);
                     htmlNormalizeArcButtonElement.click();
                 };
-                XRNA.contextMenuHTML.appendChild(flipNucleotidesHTMLButtonElement);
+                XRNA.contextMenuHTML.appendChild(reflectNucleotidesHTMLButtonElement);
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 let
                     htmlStraightenArcButtonElement = document.createElement("button");
@@ -2015,7 +2090,199 @@ export class XRNA {
             }
             getErrorMessageForFormatContextMenu = this.getErrorMessageForEditContextMenu;
             populateEditContextMenu(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : void {
-                throw new Error("Not implemented.");
+                let
+                    rnaComplex = XRNA.rnaComplexes[rnaComplexIndex],
+                    rnaMolecule = rnaComplex.rnaMolecules[rnaMoleculeIndex],
+                    nucleotide = rnaMolecule.nucleotides[nucleotideIndex],
+                    // TODO: Replace with nucleotide.basePair.rnaMoleculeIndex.
+                    basePairedRNAMoleculeIndex = rnaMoleculeIndex,
+                    basePairedRNAMolecule = rnaComplex.rnaMolecules[basePairedRNAMoleculeIndex],
+                    basePairedNucleotideIndex = nucleotide.basePairIndex,
+                    basePairedNucleotide = basePairedRNAMolecule.nucleotides[basePairedNucleotideIndex],
+                    htmlTextElement = document.createElement("text");
+                htmlTextElement.textContent = "Base-pair Properties: ";
+                htmlTextElement.style.fontSize = "14";
+                htmlTextElement.style.fontWeight = "bold";
+                XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                htmlTextElement = document.createElement("text");
+                htmlTextElement.textContent = "In RNA Complex \"" + rnaComplex.name + "\"";
+                XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                htmlTextElement = document.createElement("text");
+                htmlTextElement.textContent = "In RNA Molecule \"" + rnaMolecule.name + "\"";
+                XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                if (rnaMoleculeIndex == basePairedRNAMoleculeIndex) {
+                    if (nucleotideIndex > basePairedNucleotideIndex) {
+                        let
+                            tempNucleotideIndex = nucleotideIndex,
+                            tempNucleotide = nucleotide;
+                        nucleotideIndex = basePairedNucleotideIndex;
+                        nucleotide = basePairedNucleotide;
+                        basePairedNucleotideIndex = tempNucleotideIndex;
+                        basePairedNucleotide = tempNucleotide;
+                    }
+                    htmlTextElement = document.createElement("text");
+                    htmlTextElement.textContent = "5' Nucleotide " + (rnaMolecule.firstNucleotideIndex + nucleotideIndex) + " " + nucleotide.symbol.string;
+                    XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    htmlTextElement = document.createElement("text");
+                    htmlTextElement.textContent = "3' Nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + basePairedNucleotideIndex) + " " + basePairedNucleotide.symbol.string;
+                    XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                } else {
+                    htmlTextElement = document.createElement("text")
+                    htmlTextElement.textContent = "Nucleotide " + (rnaMolecule.firstNucleotideIndex + nucleotideIndex) + " " + nucleotide.symbol.string;
+                    XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    htmlTextElement = document.createElement("text");
+                    htmlTextElement.textContent = "In RNA Molecule \"" + basePairedRNAMolecule.name + "\"";
+                    XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    htmlTextElement = document.createElement("text");
+                    htmlTextElement.textContent = "Nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + basePairedNucleotideIndex) + " " + basePairedNucleotide.symbol.string;
+                    XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    htmlTextElement = document.createElement("text");
+                    // TODO: Replace this with nucleotide.basePair.type.
+                    htmlTextElement.textContent = "Base-pair type: " + XRNA.switchOnBasePairType(nucleotide.symbol.string, basePairedNucleotide.symbol.string, () => "canonical", () => "wobble", () => "mismatch");
+                    XRNA.contextMenuHTML.appendChild(htmlTextElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                }
+                let
+                    rnaComplexHTMLId = XRNA.rnaComplexHTMLId(rnaComplexIndex),
+                    nucleotideHTMLId = XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, rnaMoleculeIndex), nucleotideIndex),
+                    nucleotideBoundingBoxHTML = document.getElementById(XRNA.boundingBoxHTMLId(nucleotideHTMLId)),
+                    nucleotideBoundingBoxOffset = {
+                        x : parseFloat(nucleotideBoundingBoxHTML.getAttribute("x")) + parseFloat(nucleotideBoundingBoxHTML.getAttribute("width")) * 0.5,
+                        y : parseFloat(nucleotideBoundingBoxHTML.getAttribute("y")) + parseFloat(nucleotideBoundingBoxHTML.getAttribute("height")) * 0.5
+                    },
+                    nucleotideCenterPosition = VectorOperations2D.add(nucleotide.position, nucleotideBoundingBoxOffset),
+                    basePairedNucleotideHTMLId = XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, basePairedRNAMoleculeIndex), basePairedNucleotideIndex),
+                    basePairedNucleotideBoundingBoxHTML = document.getElementById(XRNA.boundingBoxHTMLId(basePairedNucleotideHTMLId)),
+                    basePairedNucleotideBoundingBoxOffset = {
+                        x : parseFloat(basePairedNucleotideBoundingBoxHTML.getAttribute("x")) + parseFloat(basePairedNucleotideBoundingBoxHTML.getAttribute("width")) * 0.5,
+                        y : parseFloat(basePairedNucleotideBoundingBoxHTML.getAttribute("y")) + parseFloat(basePairedNucleotideBoundingBoxHTML.getAttribute("height")) * 0.5
+                    },
+                    basePairedNucleotideCenterPosition = VectorOperations2D.add(basePairedNucleotide.position, basePairedNucleotideBoundingBoxOffset),
+                    averageNucleotideCenterPosition = VectorOperations2D.scaleUp(VectorOperations2D.add(nucleotideCenterPosition, basePairedNucleotideCenterPosition), 0.5),
+                    nucleotidePositionOffset = VectorOperations2D.subtract(nucleotideCenterPosition, averageNucleotideCenterPosition),
+                    basePairedNucleotidePositionOffset = VectorOperations2D.subtract(basePairedNucleotideCenterPosition, averageNucleotideCenterPosition),
+                    nucleotidePositionOffsetNormal : Vector2D,
+                    basePairedNucleotidePositionOffsetNormal : Vector2D,
+                    nucleotideCenterPositionXHTMLInputElement : HTMLInputElement,
+                    nucleotideCenterPositionYHTMLInputElement : HTMLInputElement,
+                    nucleotideHTMLElement = document.getElementById(nucleotideHTMLId),
+                    basePairedNucleotideHTMLElement = document.getElementById(basePairedNucleotideHTMLId),
+                    updateNucleotidePositionsHelper = () => {
+                        averageNucleotideCenterPosition = {
+                            x : parseFloat(nucleotideCenterPositionXHTMLInputElement.value),
+                            y : parseFloat(nucleotideCenterPositionYHTMLInputElement.value)
+                        };
+                        let
+                            nucleotideNewPosition = VectorOperations2D.subtract(VectorOperations2D.add(averageNucleotideCenterPosition, nucleotidePositionOffset), nucleotideBoundingBoxOffset),
+                            basePairedNucleotideNewPosition = VectorOperations2D.subtract(VectorOperations2D.add(averageNucleotideCenterPosition, basePairedNucleotidePositionOffset), basePairedNucleotideBoundingBoxOffset);
+                        nucleotideHTMLElement.setAttribute("transform", "translate(" + nucleotideNewPosition.x + " " + nucleotideNewPosition.y + ")");
+                        nucleotide.position = nucleotideNewPosition;
+                        basePairedNucleotideHTMLElement.setAttribute("transform", "translate(" + basePairedNucleotideNewPosition.x + " " + basePairedNucleotideNewPosition.y + ")");
+                        basePairedNucleotide.position = basePairedNucleotideNewPosition;
+                    },
+                    htmlLabelElement = document.createElement("label"),
+                    offsetMagnitude = VectorOperations2D.magnitude(nucleotidePositionOffset),
+                    offsetMagnitudeReciprocal = 1.0 / offsetMagnitude;
+                if (Utils.areApproximatelyEqual(offsetMagnitude, 0.0)) {
+                    // If the nucleotides are on top of one another, provide some default offset.
+                    nucleotidePositionOffset = {
+                        x : 0,
+                        y : 1
+                    };
+                    basePairedNucleotidePositionOffset = {
+                        x : 0,
+                        y : -1
+                    }
+                    nucleotidePositionOffsetNormal = Object.assign({}, nucleotidePositionOffset);
+                    basePairedNucleotidePositionOffsetNormal = Object.assign({}, basePairedNucleotidePositionOffset);
+                    offsetMagnitude = 1;
+                } else {
+                    nucleotidePositionOffsetNormal = VectorOperations2D.scaleUp(nucleotidePositionOffset, offsetMagnitudeReciprocal);
+                    basePairedNucleotidePositionOffsetNormal = VectorOperations2D.scaleUp(basePairedNucleotidePositionOffset, offsetMagnitudeReciprocal);
+                }
+                htmlLabelElement.textContent = "Center x: ";
+                XRNA.contextMenuHTML.appendChild(htmlLabelElement);
+                nucleotideCenterPositionXHTMLInputElement = document.createElement("input");
+                nucleotideCenterPositionXHTMLInputElement.type = "number";
+                nucleotideCenterPositionXHTMLInputElement.step = "any";
+                nucleotideCenterPositionXHTMLInputElement.value = "" + averageNucleotideCenterPosition.x.toFixed(roundingNumberOfDecimalPlaces);
+                nucleotideCenterPositionXHTMLInputElement.onchange = updateNucleotidePositionsHelper;
+                XRNA.contextMenuHTML.appendChild(nucleotideCenterPositionXHTMLInputElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                htmlLabelElement = document.createElement("label");
+                htmlLabelElement.textContent = "Center y: ";
+                XRNA.contextMenuHTML.appendChild(htmlLabelElement);
+                nucleotideCenterPositionYHTMLInputElement = document.createElement("input");
+                nucleotideCenterPositionYHTMLInputElement.type = "number";
+                nucleotideCenterPositionYHTMLInputElement.step = "any";
+                nucleotideCenterPositionYHTMLInputElement.value = "" + averageNucleotideCenterPosition.y.toFixed(roundingNumberOfDecimalPlaces);
+                nucleotideCenterPositionYHTMLInputElement.onchange = updateNucleotidePositionsHelper;
+                XRNA.contextMenuHTML.appendChild(nucleotideCenterPositionYHTMLInputElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                htmlLabelElement = document.createElement("label");
+                htmlLabelElement.textContent = "Base-pair distance: ";
+                XRNA.contextMenuHTML.appendChild(htmlLabelElement);
+                let
+                    basePairDistanceHTMLInputElement = document.createElement("input");
+                basePairDistanceHTMLInputElement.type = "number";
+                basePairDistanceHTMLInputElement.step = "any";
+                basePairDistanceHTMLInputElement.min = "0";
+                basePairDistanceHTMLInputElement.value = "" + (2.0 * offsetMagnitude).toFixed(roundingNumberOfDecimalPlaces);
+                basePairDistanceHTMLInputElement.onchange = () => {
+                    let
+                        distanceOverTwo = parseFloat(basePairDistanceHTMLInputElement.value) * 0.5;
+                    nucleotidePositionOffset = VectorOperations2D.scaleUp(nucleotidePositionOffsetNormal, distanceOverTwo);
+                    basePairedNucleotidePositionOffset = VectorOperations2D.scaleUp(basePairedNucleotidePositionOffsetNormal, distanceOverTwo);
+                    updateNucleotidePositionsHelper();
+                    XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, basePairedRNAMoleculeIndex, basePairedNucleotideIndex);
+                    XRNA.createNucleotideBond(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, basePairedRNAMoleculeIndex, basePairedNucleotideIndex);
+                };
+                XRNA.contextMenuHTML.appendChild(basePairDistanceHTMLInputElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                htmlLabelElement = document.createElement("label");
+                htmlLabelElement.textContent = "Angle (in degrees): ";
+                XRNA.contextMenuHTML.appendChild(htmlLabelElement);
+                let
+                    dv = VectorOperations2D.subtract(nucleotide.position, basePairedNucleotide.position);
+                if (rnaMoleculeIndex < basePairedRNAMoleculeIndex || nucleotideIndex < basePairedNucleotideIndex) {
+                    dv = VectorOperations2D.negate(dv);
+                }
+                let
+                    previousAngle = Math.atan2(dv.y, dv.x) + Math.PI * 0.5,
+                    angleInputHTMLElement = document.createElement("input");
+                angleInputHTMLElement.type = "number";
+                angleInputHTMLElement.step = "any";
+                angleInputHTMLElement.value = "" + (previousAngle * radiansToDegreesFactor).toFixed(roundingNumberOfDecimalPlaces);
+                angleInputHTMLElement.onchange = () => {
+                    let
+                        currentAngle = parseFloat(angleInputHTMLElement.value) * degreesToRadiansFactor,
+                        angleDifference = (currentAngle - previousAngle),
+                        averagePosition = VectorOperations2D.scaleUp(VectorOperations2D.add(nucleotide.position, basePairedNucleotide.position), 0.5),
+                        rotation = AffineMatrix3D.rotate(angleDifference),
+                        transform = AffineMatrix3D.multiply(AffineMatrix3D.translate(averagePosition.x, averagePosition.y), AffineMatrix3D.multiply(rotation, AffineMatrix3D.translate(-averagePosition.x, -averagePosition.y))),
+                        newNucleotidePosition = AffineMatrix3D.transform(transform, nucleotide.position),
+                        newBasePairedNucleotidePosition = AffineMatrix3D.transform(transform, basePairedNucleotide.position);
+                    previousAngle = currentAngle;
+                    nucleotide.position = newNucleotidePosition;
+                    nucleotideHTMLElement.setAttribute("transform", "translate(" + newNucleotidePosition.x + " " + newNucleotidePosition.y + ")");
+                    basePairedNucleotide.position = newBasePairedNucleotidePosition;
+                    basePairedNucleotideHTMLElement.setAttribute("transform", "translate(" + newBasePairedNucleotidePosition.x + " " + newBasePairedNucleotidePosition.y + ")");
+
+                    nucleotidePositionOffset = AffineMatrix3D.transform(rotation, nucleotidePositionOffset);
+                    basePairedNucleotidePositionOffset = AffineMatrix3D.transform(rotation, basePairedNucleotidePositionOffset);
+
+                    XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, basePairedRNAMoleculeIndex, basePairedNucleotideIndex);
+                    XRNA.createNucleotideBond(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, basePairedRNAMoleculeIndex, basePairedNucleotideIndex);
+                };
+                XRNA.contextMenuHTML.appendChild(angleInputHTMLElement);
             }
             populateFormatContextMenu(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : void {
                 let
@@ -2087,7 +2354,7 @@ export class XRNA {
                         htmlSelectElement.selectedIndex = selectedIndex;
                     }
                 });
-                htmlSelectElement.appendChild(new Option(""));
+                htmlSelectElement.appendChild(new Option("none"));
                 XRNA.contextMenuHTML.appendChild(htmlSelectElement);
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
                 XRNA.contextMenuHTML.appendChild(document.createElement("br"));
@@ -2117,7 +2384,7 @@ export class XRNA {
                         case "mismatch":
                             distance = XRNA.helixBasePairMismatchDistance;
                             break;
-                        case "":
+                        case "none":
                             if (nucleotide.basePairIndex >= 0) {
                                 XRNA.deleteNucleotideBond(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, boundToRNAMoleculeIndex, boundToNucleotideIndex);
                                 alert("This topology menu is no longer applicable.");
@@ -2231,7 +2498,228 @@ export class XRNA {
             }
             getErrorMessageForFormatContextMenu = this.getErrorMessageForEditContextMenu;
             populateEditContextMenu(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : void {
-                throw new Error('Not implemented.');
+                let
+                    rnaComplexHTMLId = XRNA.rnaComplexHTMLId(rnaComplexIndex),
+                    rnaComplex = XRNA.rnaComplexes[rnaComplexIndex],
+                    rnaMolecule = rnaComplex.rnaMolecules[rnaMoleculeIndex],
+                    nucleotide = rnaMolecule.nucleotides[nucleotideIndex],
+                    // TODO: Replace this with nucleotide.basePair.rnaMoleculeIndex.
+                    basePairedRNAMoleculeIndex = rnaMoleculeIndex,
+                    basePairedRNAMolecule = rnaComplex.rnaMolecules[basePairedRNAMoleculeIndex],
+                    basePairedNucleotideIndex = nucleotide.basePairIndex,
+                    basePairedNucleotide = basePairedRNAMolecule.nucleotides[basePairedNucleotideIndex],
+                    selectedNucleotideIndices = this.getSelectedNucleotideIndices(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex);
+                selectedNucleotideIndices.sort((nucleotideIndicesTuple0 : NucleotideIndicesTuple, nucleotideIndicesTuple1 : NucleotideIndicesTuple) => {
+                    let
+                        rnaMoleculeIndexDifference = nucleotideIndicesTuple0.rnaMoleculeIndex - nucleotideIndicesTuple1.rnaMoleculeIndex;
+                    if (rnaMoleculeIndexDifference == 0) {
+                        return nucleotideIndicesTuple0.nucleotideIndex - nucleotideIndicesTuple1.nucleotideIndex;
+                    } else {
+                        return rnaMoleculeIndexDifference;
+                    }
+                });
+                let
+                    startingNucleotideIndex0 = selectedNucleotideIndices[0].nucleotideIndex,
+                    endingNucleotideIndex0 : number,
+                    startingNucleotideIndex1 : number,
+                    endingNucleotideIndex1 = selectedNucleotideIndices[selectedNucleotideIndices.length - 1].nucleotideIndex,
+                    labelHTMLElement : HTMLLabelElement,
+                    textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "Helix Properties: ";
+                textHTMLElement.style.fontSize = "14";
+                textHTMLElement.style.fontWeight = "bold";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "In RNA Complex \"" + rnaComplex.name + "\"";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                let
+                    boundNucleotidesCount : number = null;
+                for (let i = 1; i < selectedNucleotideIndices.length; i++) {
+                    let
+                        tupleIMinusOne = selectedNucleotideIndices[i - 1],
+                        tupleI = selectedNucleotideIndices[i];
+                    if ((tupleIMinusOne.rnaMoleculeIndex != tupleI.rnaMoleculeIndex) || (tupleIMinusOne.nucleotideIndex != tupleI.nucleotideIndex - 1) || rnaComplex.rnaMolecules[tupleI.rnaMoleculeIndex].nucleotides[tupleI.nucleotideIndex].basePairIndex < 0) {
+                        // The helix has turned.
+                        boundNucleotidesCount = i;
+                        endingNucleotideIndex0 = tupleIMinusOne.nucleotideIndex;
+                        startingNucleotideIndex1 = tupleI.nucleotideIndex;
+                        break;
+                    }
+                }
+                if (boundNucleotidesCount == null) {
+                    let
+                        message = "The helix beginning at RNA molecule \"" + rnaMolecule.name + "\" nucleotide " + (rnaMolecule.firstNucleotideIndex + startingNucleotideIndex0) + " is badly formed; nucleotides may not be bound to adjacent nucleotides.";
+                    alert(message);
+                    XRNA.contextMenuHTML.style.visibility = "none";
+                    throw new Error(message);
+                }
+                textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "In RNA molecule \"" + rnaMolecule.name + "\"";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                if (rnaMoleculeIndex == basePairedRNAMoleculeIndex) {
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "5' start nucleotide " + (rnaMolecule.firstNucleotideIndex + startingNucleotideIndex0) + " " + rnaMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "5' end nucleotide " + (rnaMolecule.firstNucleotideIndex + endingNucleotideIndex0) + " " + rnaMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "3' start nucleotide " + (rnaMolecule.firstNucleotideIndex + startingNucleotideIndex1) + " " + rnaMolecule.nucleotides[endingNucleotideIndex1].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "3' end nucleotide " + (rnaMolecule.firstNucleotideIndex + endingNucleotideIndex1) + " " + rnaMolecule.nucleotides[endingNucleotideIndex1].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                } else {
+                    let
+                        firstNucleotideIndicesTuple = selectedNucleotideIndices[0],
+                        lastNucleotideIndicesTuple = selectedNucleotideIndices[selectedNucleotideIndices.length - 1];
+                    rnaMoleculeIndex = firstNucleotideIndicesTuple.rnaMoleculeIndex;
+                    rnaMolecule = rnaComplex.rnaMolecules[rnaMoleculeIndex];
+                    nucleotideIndex = firstNucleotideIndicesTuple.nucleotideIndex;
+                    nucleotide = rnaMolecule.nucleotides[nucleotideIndex];
+                    basePairedRNAMoleculeIndex = lastNucleotideIndicesTuple.rnaMoleculeIndex;
+                    basePairedRNAMolecule = rnaComplex.rnaMolecules[basePairedRNAMoleculeIndex];
+                    basePairedNucleotideIndex = lastNucleotideIndicesTuple.nucleotideIndex;
+                    basePairedNucleotide = basePairedRNAMolecule.nucleotides[basePairedNucleotideIndex];
+
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "Start nucleotide " + (rnaMolecule.firstNucleotideIndex + startingNucleotideIndex0) + " " + rnaMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "End nucleotide " + (rnaMolecule.firstNucleotideIndex + endingNucleotideIndex0) + " " + rnaMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "In RNA molecule \"" + basePairedRNAMolecule.name + "\"";
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "Start nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + startingNucleotideIndex1) + " " + rnaMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "End nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + endingNucleotideIndex1) + " " + rnaMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                }
+                let
+                    startingNucleotide0 = rnaMolecule.nucleotides[startingNucleotideIndex0],
+                    endingNucleotide1 = basePairedRNAMolecule.nucleotides[endingNucleotideIndex1],
+                    originOfRotation = VectorOperations2D.scaleUp(VectorOperations2D.add(startingNucleotide0.position, endingNucleotide1.position), 0.5),
+                    dv = VectorOperations2D.subtract(rnaMolecule.nucleotides[startingNucleotideIndex0].position, basePairedRNAMolecule.nucleotides[endingNucleotideIndex1].position),
+                    orthogonalDv = VectorOperations2D.orthogonalize(dv),
+                    countOrientationVotes = 0;
+                for (let i = 1; i < selectedNucleotideIndices.length - 1; i++) {
+                    let
+                        nucleotideIndicesTuple = selectedNucleotideIndices[i];
+                    countOrientationVotes += Utils.sign(VectorOperations2D.dotProduct(orthogonalDv, VectorOperations2D.subtract(rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex].position, originOfRotation)));
+                }
+                if (countOrientationVotes < 0) {
+                    // More nucleotides are in the opposite direction of the orthogonal difference vector.
+                    orthogonalDv = VectorOperations2D.negate(orthogonalDv);
+                }
+                labelHTMLElement = document.createElement("label");
+                labelHTMLElement.textContent = "Angle (in degrees): ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                let
+                    previousAngle = Math.atan2(orthogonalDv.y, orthogonalDv.x),
+                    resetBondsHelper = () => {
+                        for (let i = 0; i < boundNucleotidesCount; i++) {
+                            let
+                                tuple0 = selectedNucleotideIndices[i],
+                                tuple1 = selectedNucleotideIndices[selectedNucleotideIndices.length - (i + 1)];
+                            XRNA.deleteNucleotideBond(rnaComplexIndex, tuple0.rnaMoleculeIndex, tuple0.nucleotideIndex, tuple1.rnaMoleculeIndex, tuple1.nucleotideIndex);
+                            XRNA.createNucleotideBond(rnaComplexIndex, tuple0.rnaMoleculeIndex, tuple0.nucleotideIndex, tuple1.rnaMoleculeIndex, tuple1.nucleotideIndex);
+                        }
+                    },
+                    angleInputHTMLElement = document.createElement("input");
+                angleInputHTMLElement.type = "number";
+                angleInputHTMLElement.step = "any";
+                angleInputHTMLElement.value = "" + (previousAngle * radiansToDegreesFactor).toFixed(roundingNumberOfDecimalPlaces);
+                angleInputHTMLElement.onchange = () => {
+                    let
+                        newAngle = parseFloat(angleInputHTMLElement.value) * degreesToRadiansFactor,
+                        transform = AffineMatrix3D.multiply(AffineMatrix3D.translate(originOfRotation.x, originOfRotation.y), AffineMatrix3D.multiply(AffineMatrix3D.rotate(newAngle - previousAngle), AffineMatrix3D.translate(-originOfRotation.x, -originOfRotation.y)));
+                    previousAngle = newAngle;
+                    selectedNucleotideIndices.forEach(nucleotideIndicesTuple => {
+                        let
+                            currentNucleotide = rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex],
+                            newPosition = AffineMatrix3D.transform(transform, currentNucleotide.position);
+                        currentNucleotide.position = newPosition;
+                        document.getElementById(XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, nucleotideIndicesTuple.rnaMoleculeIndex), nucleotideIndicesTuple.nucleotideIndex)).setAttribute("transform", "translate(" + newPosition.x + " " + newPosition.y + ")");
+                    });
+                    resetBondsHelper();
+                };
+                XRNA.contextMenuHTML.appendChild(angleInputHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                let
+                    flipButtonHTMLElement = document.createElement("button");
+                flipButtonHTMLElement.textContent = "Flip helix";
+                flipButtonHTMLElement.onclick = () => {
+                    selectedNucleotideIndices.forEach(selectedNucleotideIndicesTuple => {
+                        let
+                            currentNucleotide = rnaComplex.rnaMolecules[selectedNucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[selectedNucleotideIndicesTuple.nucleotideIndex],
+                            dif = VectorOperations2D.subtract(currentNucleotide.position, originOfRotation),
+                            newPosition = VectorOperations2D.subtract(currentNucleotide.position, VectorOperations2D.scaleUp(VectorOperations2D.subtract(dif, VectorOperations2D.vectorProjection(dif, orthogonalDv)), 2.0));
+                        currentNucleotide.position = newPosition;
+                        document.getElementById(XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, selectedNucleotideIndicesTuple.rnaMoleculeIndex), selectedNucleotideIndicesTuple.nucleotideIndex)).setAttribute("transform", "translate(" + newPosition.x + " " + newPosition.y + ")");
+                    });
+                    resetBondsHelper();
+                };
+                XRNA.contextMenuHTML.appendChild(flipButtonHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                labelHTMLElement = document.createElement("label");
+                labelHTMLElement.textContent = "Origin x: ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                let
+                    nucleotidePositionOffsets = new Array<Vector2D>();
+                selectedNucleotideIndices.forEach(selectedNucleotideIndicesTuple => {
+                    let
+                        nucleotidePosition = rnaComplex.rnaMolecules[selectedNucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[selectedNucleotideIndicesTuple.nucleotideIndex].position;
+                    nucleotidePositionOffsets.push(VectorOperations2D.subtract(nucleotidePosition, originOfRotation));
+                });
+                let
+                    updateNucleotidePositionsHelper = () => {
+                        let
+                            newOriginPosition = {
+                                x : parseFloat(centerXInputHTMLElement.value),
+                                y : parseFloat(centerYInputHTMLElement.value)
+                            };
+                        for (let i = 0; i < nucleotidePositionOffsets.length; i++) {
+                            let
+                                newNucleotidePosition = VectorOperations2D.add(newOriginPosition, nucleotidePositionOffsets[i]),
+                                nucleotideIndicesTupleI = selectedNucleotideIndices[i],
+                                currentNucleotide = rnaComplex.rnaMolecules[nucleotideIndicesTupleI.rnaMoleculeIndex].nucleotides[nucleotideIndicesTupleI.nucleotideIndex];
+                            currentNucleotide.position = newNucleotidePosition;
+                            document.getElementById(XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, nucleotideIndicesTupleI.rnaMoleculeIndex), nucleotideIndicesTupleI.nucleotideIndex)).setAttribute("transform", "translate(" + newNucleotidePosition.x + " " + newNucleotidePosition.y + ")");
+                        }
+                    },
+                    centerXInputHTMLElement = document.createElement("input");
+                centerXInputHTMLElement.type = "number";
+                centerXInputHTMLElement.step = "any";
+                centerXInputHTMLElement.value = "" + originOfRotation.x.toFixed(roundingNumberOfDecimalPlaces);
+                centerXInputHTMLElement.onchange = updateNucleotidePositionsHelper;
+                XRNA.contextMenuHTML.appendChild(centerXInputHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                labelHTMLElement = document.createElement("label");
+                labelHTMLElement.textContent = "Origin y: ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                let
+                    centerYInputHTMLElement = document.createElement("input");
+                centerYInputHTMLElement.type = "number";
+                centerYInputHTMLElement.step = "any";
+                centerYInputHTMLElement.value = "" + originOfRotation.y.toFixed(roundingNumberOfDecimalPlaces);
+                centerYInputHTMLElement.onchange = updateNucleotidePositionsHelper;
+                XRNA.contextMenuHTML.appendChild(centerYInputHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
             }
             populateFormatContextMenu(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : void {
                 let
@@ -2408,14 +2896,370 @@ export class XRNA {
                 return SelectionConstraint.createErrorMessageForSelection('a base-paired nucleotide within a stacked helix', 'a base-paired nucleotide with proximate nucleotides on either side exclusively bonded to the other');
             }
             getErrorMessageForEditContextMenu() : string {
-                return this.getErrorMessageForSelection();
+                throw new Error('Not implemented.');
             }
             getErrorMessageForFormatContextMenu = this.getErrorMessageForEditContextMenu;
+            getNucleotideIndicesHelper(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : {sortedSelectedNucleotideIndices : Array<NucleotideIndicesTuple>, rnaMoleculeIndex : number, basePairedRNAMoleculeIndex : number, startingNucleotideIndex0 : number, endingNucleotideIndex0 : number, startingNucleotideIndex1 : number, endingNucleotideIndex1 : number} {
+                let
+                    selectedNucleotideIndices = this.getSelectedNucleotideIndices(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex)
+                selectedNucleotideIndices.sort((nucleotideIndicesTuple0 : NucleotideIndicesTuple, nucleotideIndicesTuple1 : NucleotideIndicesTuple) => {
+                    let
+                        rnaMoleculeIndexDifference = nucleotideIndicesTuple0.rnaMoleculeIndex - nucleotideIndicesTuple1.rnaMoleculeIndex;
+                    if (rnaMoleculeIndexDifference == 0) {
+                        return nucleotideIndicesTuple0.nucleotideIndex - nucleotideIndicesTuple1.nucleotideIndex;
+                    } else {
+                        return rnaMoleculeIndexDifference;
+                    }
+                });
+                let
+                    firstNucleotideIndicesTuple = selectedNucleotideIndices[0],
+                    lastNucleotideIndicesTuple = selectedNucleotideIndices[selectedNucleotideIndices.length - 1];
+                rnaMoleculeIndex = firstNucleotideIndicesTuple.rnaMoleculeIndex;
+                let
+                    basePairedRNAMoleculeIndex = lastNucleotideIndicesTuple.rnaMoleculeIndex,
+                    startingNucleotideIndex0 = firstNucleotideIndicesTuple.nucleotideIndex,
+                    endingNucleotideIndex0 : number,
+                    startingNucleotideIndex1 : number,
+                    endingNucleotideIndex1 = lastNucleotideIndicesTuple.nucleotideIndex;
+                for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                    let
+                        nucleotideIndicesTuple = selectedNucleotideIndices[i],
+                        nucleotide = XRNA.rnaComplexes[rnaComplexIndex].rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex];
+                    if (nucleotideIndicesTuple.rnaMoleculeIndex != rnaMoleculeIndex || (i >= (selectedNucleotideIndices.length) / 2) && nucleotide.basePairIndex >= 0) {
+                        startingNucleotideIndex1 = nucleotideIndicesTuple.nucleotideIndex;
+                        break;
+                    } else {
+                        if (nucleotide.basePairIndex >= 0) {
+                            endingNucleotideIndex0 = nucleotideIndicesTuple.nucleotideIndex;
+                        }
+                    }
+                }
+                return {
+                    sortedSelectedNucleotideIndices : selectedNucleotideIndices,
+                    rnaMoleculeIndex : rnaMoleculeIndex,
+                    basePairedRNAMoleculeIndex : basePairedRNAMoleculeIndex,
+                    startingNucleotideIndex0 : startingNucleotideIndex0,
+                    endingNucleotideIndex0 : endingNucleotideIndex0,
+                    startingNucleotideIndex1 : startingNucleotideIndex1,
+                    endingNucleotideIndex1 : endingNucleotideIndex1
+                };
+            }
             populateEditContextMenu(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : void {
-                throw new Error('Not implemented.');
+                let
+                    rnaComplexHTMLId = XRNA.rnaComplexHTMLId(rnaComplexIndex),
+                    rnaComplex = XRNA.rnaComplexes[rnaComplexIndex],
+                    textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "Stacked-helix properties: ";
+                textHTMLElement.style.fontSize = "14";
+                textHTMLElement.style.fontWeight = "bold";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "In RNA Complex \"" + rnaComplex.name + "\"";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                let
+                    nucleotideIndicesData = this.getNucleotideIndicesHelper(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex);
+                rnaMoleculeIndex = nucleotideIndicesData.rnaMoleculeIndex;
+                let
+                    rnaMolecule = rnaComplex.rnaMolecules[rnaMoleculeIndex],
+                    selectedNucleotideIndices = nucleotideIndicesData.sortedSelectedNucleotideIndices,
+                    basePairedRNAMoleculeIndex = nucleotideIndicesData.basePairedRNAMoleculeIndex,
+                    basePairedRNAMolecule = rnaComplex.rnaMolecules[basePairedRNAMoleculeIndex],
+                    startingNucleotideIndex0 = nucleotideIndicesData.startingNucleotideIndex0,
+                    endingNucleotideIndex0 = nucleotideIndicesData.endingNucleotideIndex0,
+                    startingNucleotideIndex1 = nucleotideIndicesData.startingNucleotideIndex1,
+                    endingNucleotideIndex1 = nucleotideIndicesData.endingNucleotideIndex1;
+                textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "In RNA Molecule \"" + rnaMolecule.name + "\"";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                if (rnaMoleculeIndex == basePairedRNAMoleculeIndex) {
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "5' start nucleotide " + (rnaMolecule.firstNucleotideIndex + startingNucleotideIndex0) + " " + rnaMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "5' end nucleotide " + (rnaMolecule.firstNucleotideIndex + endingNucleotideIndex0) + " " + rnaMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "3' start nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + startingNucleotideIndex1) + " " + basePairedRNAMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "3' end nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + endingNucleotideIndex1) + " "+ basePairedRNAMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                } else {
+                    let
+                        errorMessage = "This stacked helix is multi-molecular; please use the \"RNA Helix\" selection constraint instead.";
+                    alert(errorMessage);
+                    throw new Error(errorMessage);
+                }
+                let
+                    firstNucleotide = rnaMolecule.nucleotides[startingNucleotideIndex0],
+                    lastNucleotide = basePairedRNAMolecule.nucleotides[endingNucleotideIndex1],
+                    originOfTransformation = VectorOperations2D.scaleUp(VectorOperations2D.add(firstNucleotide.position, lastNucleotide.position), 0.5),
+                    boundingNucleotidesPositionDifference = VectorOperations2D.subtract(lastNucleotide.position, firstNucleotide.position),
+                    boundingNucleotidesOrthogonalPositionDifference = VectorOperations2D.orthogonalize(boundingNucleotidesPositionDifference),
+                    previousAngleAtOrigin = Math.atan2(boundingNucleotidesOrthogonalPositionDifference.y, boundingNucleotidesOrthogonalPositionDifference.x),
+                    labelHTMLElement = document.createElement("label"),
+                    countOrientationVotes = 0;
+                for (let i = 1; i < selectedNucleotideIndices.length - 1; i++) {
+                    let
+                        nucleotideIndicesTuple = selectedNucleotideIndices[i];
+                    countOrientationVotes += Utils.sign(VectorOperations2D.dotProduct(boundingNucleotidesOrthogonalPositionDifference, VectorOperations2D.subtract(rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex].position, originOfTransformation)));
+                }
+                if (countOrientationVotes < 0) {
+                    // More nucleotides are in the opposite direction of the orthogonal difference vector.
+                    boundingNucleotidesOrthogonalPositionDifference = VectorOperations2D.negate(boundingNucleotidesOrthogonalPositionDifference);
+                }
+                labelHTMLElement.textContent = "Angle (in degrees): ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                let
+                    resetNucleotideBondsHelper = () => {
+                        for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                            let
+                                nucleotideIndicesTuple = selectedNucleotideIndices[i],
+                                nucleotide = rnaMolecule.nucleotides[nucleotideIndicesTuple.nucleotideIndex],
+                                basePairedNucleotideIndex = nucleotide.basePairIndex;
+                            if (basePairedNucleotideIndex >= 0) {
+                                XRNA.deleteNucleotideBond(rnaComplexIndex, nucleotideIndicesTuple.rnaMoleculeIndex, nucleotideIndicesTuple.nucleotideIndex, basePairedRNAMoleculeIndex, basePairedNucleotideIndex);
+                                XRNA.createNucleotideBond(rnaComplexIndex, nucleotideIndicesTuple.rnaMoleculeIndex, nucleotideIndicesTuple.nucleotideIndex, basePairedRNAMoleculeIndex, basePairedNucleotideIndex);
+                                if (nucleotideIndicesTuple.nucleotideIndex == endingNucleotideIndex0) {
+                                    break;
+                                }
+                            }
+                        };
+                    },
+                    angleInputHTMLElement = document.createElement("input");
+                angleInputHTMLElement.type = "number";
+                angleInputHTMLElement.value = "" + (previousAngleAtOrigin * radiansToDegreesFactor).toFixed(roundingNumberOfDecimalPlaces);
+                angleInputHTMLElement.step = "any";
+                angleInputHTMLElement.onchange = () => {
+                    let
+                        currentAngleAtOrigin = parseFloat(angleInputHTMLElement.value) * degreesToRadiansFactor,
+                        angleDifference = currentAngleAtOrigin - previousAngleAtOrigin,
+                        rotation = AffineMatrix3D.rotate(angleDifference),
+                        transformation = AffineMatrix3D.multiply(AffineMatrix3D.translate(originOfTransformation.x, originOfTransformation.y), AffineMatrix3D.multiply(rotation, AffineMatrix3D.translate(-originOfTransformation.x, -originOfTransformation.y)));
+                    previousAngleAtOrigin = currentAngleAtOrigin;
+                    for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                        let
+                            nucleotideIndicesTuple = selectedNucleotideIndices[i],
+                            nucleotide = rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex],
+                            newPosition = AffineMatrix3D.transform(transformation, nucleotide.position);
+                        nucleotide.position = newPosition;
+                        document.getElementById(XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, nucleotideIndicesTuple.rnaMoleculeIndex), nucleotideIndicesTuple.nucleotideIndex)).setAttribute("transform", "translate(" + newPosition.x + " " + newPosition.y + ")");
+                    }
+                    boundingNucleotidesOrthogonalPositionDifference = AffineMatrix3D.transform(rotation, boundingNucleotidesOrthogonalPositionDifference);
+                    resetNucleotideBondsHelper();
+                };
+                XRNA.contextMenuHTML.appendChild(angleInputHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                labelHTMLElement = document.createElement("label");
+                labelHTMLElement.textContent = "Origin x: ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                let
+                    nucleotidePositionOffsets = new Array<Vector2D>();
+                for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                    let
+                        nucleotideIndicesTuple = selectedNucleotideIndices[i];
+                    nucleotidePositionOffsets.push(VectorOperations2D.subtract(rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex].position, originOfTransformation));
+                }
+                let
+                    updateNucleotidePositions = () => {
+                        let
+                            newOriginOfTransformation = {
+                                x : parseFloat(originXInputHTMLElement.value),
+                                y : parseFloat(originYInputHTMLElement.value)
+                            };
+                        for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                            let
+                                nucleotideIndicesTuple = selectedNucleotideIndices[i],
+                                newPosition = VectorOperations2D.add(newOriginOfTransformation, nucleotidePositionOffsets[i]);
+                            rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex].position = newPosition;
+                            document.getElementById(XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, nucleotideIndicesTuple.rnaMoleculeIndex), nucleotideIndicesTuple.nucleotideIndex)).setAttribute("transform", "translate(" + newPosition.x + " " + newPosition.y + ")");
+                        }
+                    },
+                    originXInputHTMLElement = document.createElement("input");
+                originXInputHTMLElement.type = "number";
+                originXInputHTMLElement.step = "any";
+                originXInputHTMLElement.value = "" + originOfTransformation.x.toFixed(roundingNumberOfDecimalPlaces);
+                originXInputHTMLElement.onchange = () => updateNucleotidePositions();
+                XRNA.contextMenuHTML.appendChild(originXInputHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                labelHTMLElement = document.createElement("label");
+                labelHTMLElement.textContent = "Origin y: ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                let
+                    originYInputHTMLElement = document.createElement("input");
+                originYInputHTMLElement.type = "number";
+                originYInputHTMLElement.step = "any";
+                originYInputHTMLElement.value = "" + originOfTransformation.y.toFixed(roundingNumberOfDecimalPlaces);
+                originYInputHTMLElement.onchange = () => updateNucleotidePositions();
+                XRNA.contextMenuHTML.appendChild(originYInputHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                let
+                    reflectNucleotidesHTMLButtonElement = document.createElement("button");
+                reflectNucleotidesHTMLButtonElement.textContent = "Flip stacked helix";
+                reflectNucleotidesHTMLButtonElement.onclick = () => {
+                    for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                        let
+                            nucleotideIndicesTuple = selectedNucleotideIndices[i],
+                            nucleotide = rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex],
+                            oldPosition = nucleotide.position,
+                            oldPositionMinusOrigin = VectorOperations2D.subtract(oldPosition, originOfTransformation),
+                            newPosition = VectorOperations2D.subtract(oldPosition, VectorOperations2D.scaleUp(VectorOperations2D.subtract(oldPositionMinusOrigin, VectorOperations2D.vectorProjection(oldPositionMinusOrigin, boundingNucleotidesOrthogonalPositionDifference)), 2.0));
+                        nucleotide.position = newPosition;
+                        document.getElementById(XRNA.nucleotideHTMLId(XRNA.rnaMoleculeHTMLId(rnaComplexHTMLId, nucleotideIndicesTuple.rnaMoleculeIndex), nucleotideIndicesTuple.nucleotideIndex)).setAttribute("transform", "translate(" + newPosition.x + " " + newPosition.y + ")");
+                        nucleotidePositionOffsets[i] = VectorOperations2D.add(nucleotidePositionOffsets[i], VectorOperations2D.subtract(newPosition, oldPosition));
+                    }
+                    resetNucleotideBondsHelper();
+                };
+                XRNA.contextMenuHTML.appendChild(reflectNucleotidesHTMLButtonElement);
             }
             populateFormatContextMenu(rnaComplexIndex : number, rnaMoleculeIndex : number, nucleotideIndex : number) : void {
-                throw new Error('Not implemented.');
+                let
+                    rnaComplex = XRNA.rnaComplexes[rnaComplexIndex],
+                    textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "Stacked-helix topology";
+                textHTMLElement.style.fontSize = "14";
+                textHTMLElement.style.fontWeight = "bold";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "In RNA Complex \"" + rnaComplex.name + "\"";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                let
+                    nucleotideIndicesData = this.getNucleotideIndicesHelper(rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex);
+                rnaMoleculeIndex = nucleotideIndicesData.rnaMoleculeIndex;
+                let
+                    rnaMolecule = rnaComplex.rnaMolecules[rnaMoleculeIndex],
+                    selectedNucleotideIndices = nucleotideIndicesData.sortedSelectedNucleotideIndices,
+                    basePairedRNAMoleculeIndex = nucleotideIndicesData.basePairedRNAMoleculeIndex,
+                    basePairedRNAMolecule = rnaComplex.rnaMolecules[basePairedRNAMoleculeIndex],
+                    startingNucleotideIndex0 = nucleotideIndicesData.startingNucleotideIndex0,
+                    endingNucleotideIndex0 = nucleotideIndicesData.endingNucleotideIndex0,
+                    startingNucleotideIndex1 = nucleotideIndicesData.startingNucleotideIndex1,
+                    endingNucleotideIndex1 = nucleotideIndicesData.endingNucleotideIndex1;
+                textHTMLElement = document.createElement("text");
+                textHTMLElement.textContent = "In RNA Molecule \"" + rnaMolecule.name + "\"";
+                XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                if (rnaMoleculeIndex == basePairedRNAMoleculeIndex) {
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "5' start nucleotide " + (rnaMolecule.firstNucleotideIndex + startingNucleotideIndex0) + " " + rnaMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "5' end nucleotide " + (rnaMolecule.firstNucleotideIndex + endingNucleotideIndex0) + " " + rnaMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "3' start nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + startingNucleotideIndex1) + " " + basePairedRNAMolecule.nucleotides[startingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                    textHTMLElement = document.createElement("text");
+                    textHTMLElement.textContent = "3' end nucleotide " + (basePairedRNAMolecule.firstNucleotideIndex + endingNucleotideIndex1) + " "+ basePairedRNAMolecule.nucleotides[endingNucleotideIndex0].symbol.string;
+                    XRNA.contextMenuHTML.appendChild(textHTMLElement);
+                    XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                } else {
+                    let
+                        errorMessage = "This stacked helix is multi-molecular; please use the \"RNA Helix\" selection constraint instead.";
+                    alert(errorMessage);
+                    throw new Error(errorMessage);
+                }
+                let
+                    labelHTMLElement = document.createElement("label");
+                labelHTMLElement.textContent = "Helices: ";
+                XRNA.contextMenuHTML.appendChild(labelHTMLElement);
+                XRNA.contextMenuHTML.appendChild(document.createElement("br"));
+                let
+                    helixListTextAreaHTMLElement = document.createElement("textarea"),
+                    helixListTextContent = new Array<string>(),
+                    helixLength = 0,
+                    helixStartingNucleotideIndex : number = null,
+                    helixStartingRNAMoleculeIndex : number = null,
+                    helixEndingNucleotideIndex : number = null,
+                    helixEndingRNAMoleculeIndex : number = null,
+                    appendToTextContentHelper = () => {
+                        let
+                            helixEndingRNAMolecule = rnaComplex.rnaMolecules[helixEndingRNAMoleculeIndex],
+                            newLine = (helixStartingNucleotideIndex + rnaMolecule.firstNucleotideIndex) + " " + (helixEndingNucleotideIndex + helixEndingRNAMolecule.firstNucleotideIndex) + " " + helixLength;
+                        if (helixStartingRNAMoleculeIndex != helixEndingRNAMoleculeIndex) {
+                            newLine += " " + helixEndingRNAMolecule.name;
+                        }
+                        helixListTextContent.push(newLine);
+                    };
+                for (let i = 0; i < selectedNucleotideIndices.length; i++) {
+                    let
+                        nucleotideIndicesTuple = selectedNucleotideIndices[i],
+                        nucleotide = rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex];
+                    if (nucleotide.basePairIndex >= 0) {
+                        helixLength++;
+                        if (helixStartingNucleotideIndex == null) {
+                            helixStartingNucleotideIndex = nucleotideIndicesTuple.nucleotideIndex;
+                            helixStartingRNAMoleculeIndex = nucleotideIndicesTuple.rnaMoleculeIndex;
+                            helixEndingNucleotideIndex = nucleotide.basePairIndex;
+                            // TODO: Replace "nucleotideIndicesTuple.rnaMoleculeIndex" with "nucleotide.basePair.rnaMoleculeIndex".
+                            helixEndingRNAMoleculeIndex = nucleotideIndicesTuple.rnaMoleculeIndex;
+                        }
+                        if (nucleotideIndicesTuple.nucleotideIndex == endingNucleotideIndex0) {
+                            appendToTextContentHelper();
+                            break;
+                        }
+                    } else {
+                        if (helixEndingNucleotideIndex != null) {
+                            appendToTextContentHelper();
+                            helixEndingNucleotideIndex = null;
+                        }
+                        helixLength = 0;
+                        helixStartingNucleotideIndex = null;
+                    }
+                }
+                helixListTextAreaHTMLElement.textContent = helixListTextContent.join("\n");
+                helixListTextAreaHTMLElement.onchange = () => {
+                    selectedNucleotideIndices.forEach(nucleotideIndicesTuple => {
+                        let
+                            nucleotide = rnaComplex.rnaMolecules[nucleotideIndicesTuple.rnaMoleculeIndex].nucleotides[nucleotideIndicesTuple.nucleotideIndex];
+                        if (nucleotide.basePairIndex >= 0) {
+                            // TODO: Replace the second "rnaMoleculeIndex" with "nucleotide.basePair.rnaMoleculeIndex".
+                            XRNA.deleteNucleotideBond(rnaComplexIndex, nucleotideIndicesTuple.rnaMoleculeIndex, nucleotideIndicesTuple.nucleotideIndex, rnaMoleculeIndex, nucleotide.basePairIndex);
+                        }
+                    });
+                    let
+                        lines = helixListTextAreaHTMLElement.value.split(/\n/);
+                    outer: for (let i = 0; i < lines.length; i++) {
+                        let
+                            match = lines[i].match(/\s*(\d+)\s+(\d+)\s+(\d+)(\s+\w+)?\s*/),
+                            helixStartingNucleotideIndex = parseInt(match[1]) - 1,
+                            helixEndingNucleotideIndex = parseInt(match[2]) - 1,
+                            helixLength = parseInt(match[3]),
+                            boundHelixName = match[4],
+                            boundHelixIndex = rnaMoleculeIndex;
+                        if (boundHelixName) {
+                            boundHelixIndex = -1;
+                            inner: for (let k = 0; k < rnaComplex.rnaMolecules.length; k++) {
+                                if (rnaComplex.rnaMolecules[k].name == boundHelixName) {
+                                    boundHelixIndex = k;
+                                    break inner;
+                                }
+                            }
+                            if (boundHelixIndex == -1) {
+                                alert("The input helix name \"" + boundHelixName + "\" was not found within this RNA Complex.");
+                                continue outer;
+                            }
+                        }
+                        for (let j = 0; j < helixLength; j++) {
+                            let
+                                currentNucleotideIndex = helixStartingNucleotideIndex + j;
+                            XRNA.createNucleotideBond(rnaComplexIndex, rnaMoleculeIndex, currentNucleotideIndex, boundHelixIndex, helixEndingNucleotideIndex - j);
+                        }
+                    }
+                };
+                XRNA.contextMenuHTML.appendChild(helixListTextAreaHTMLElement);
             }
         },
         'RNA Sub-domain' : new class extends SelectionConstraint {
