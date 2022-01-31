@@ -11,6 +11,7 @@
 
 # How to Use XRNA:
 1. Open an input file within the "File input/output" tab at the top left of the screen.
+    * An example .xrna file (EC_LSU_3D_l.xrna) is included in the root directory of this project.
 2, Click on the button labeled "Choose an input file"
     * The supported input file types are listed at the bottom right of the resulting file-selection window.
         a. These file types include .XRNA, .XML, .PS, .SS, .SVG, .JSON
