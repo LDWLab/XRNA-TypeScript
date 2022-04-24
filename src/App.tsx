@@ -46,15 +46,35 @@ function App() {
   const [outputFileExtension, setOutputFileExtension] = useState<string>("");
   const inputFileReaders : Record<string, FileReader> = {
     "xrna" : (_ : string) => {
+
+    },
+    "xml" : (_ : string) => {
+
+    },
+    "ps" : (_ : string) => {
+
+    },
+    "ss" : (_ : string) => {
+
     },
     "str" : (_ : string) => {
+
+    },
+    "svg" : (_ : string) => {
+
+    },
+    "json" : (_ : string) => {
+      
     }
   };
-  const [downloadAnchorHref, setDownloadAnchorHref] = useState<string>();
   const outputFileGenerators : Record<string, FileGenerator> = {
-    "json" : () => "This is a JSON file.",
     "xrna" : () => "This is an XRNA file.",
-    "svg" : () => "This is an SVG file."
+    "svg" : () => "This is an SVG file.",
+    "tr" : () => "This is a TR file.",
+    "csv" : () => "This is a CSV file.",
+    "bpseq" : () => "This is a BPSeq file.",
+    "jpg" : () => "This is a JPG file.",
+    "json" : () => "This is a JSON file."
   };
   const selectionConstraints : Record<string, SelectionConstraint> = {
     "RNA Single Nucleotide" : {
@@ -100,6 +120,7 @@ function App() {
 
     }
   };
+  const [downloadAnchorHref, setDownloadAnchorHref] = useState<string>();
   const outputFileExtensionSelectRef = createRef<HTMLSelectElement>();
   const downloadAnchorRef = createRef<HTMLAnchorElement>();
   useEffect(() => {
@@ -115,14 +136,17 @@ function App() {
   const minimumZoomExponent = -50;
   const maximumZoomExponent = 50;
   const zoomBase = 1.1;
+  const [showToolsFlag, setShowToolsFlag] = useState<boolean>(true);
   return (
     <div style={{
       border : showTabReminderFlag ? "ridge " + (buttonData[currentTab] as ButtonData).highlightColor : "none" ,
-      color : "white"
+      color : "white",
+      padding : 0,
+      margin : 0,
+      backgroundColor : "rgb(54, 64, 79)"
     }}>
       <div style={{
-        backgroundColor : "rgb(54, 64, 79)",
-        width : "100"
+        display : showToolsFlag ? "block" : "none"
       }}>
         {Object.entries(buttonData).map(([tabName, buttonDatum]) => {
           return <button style={{
@@ -226,6 +250,15 @@ function App() {
           }} step={0.01}></input>
         </label>
       </div>
+      <button style={{
+        color : "white",
+        backgroundColor : "inherit",
+        border : "groove gray",
+        width : "10%",
+        display : "block",
+        marginLeft : "auto",
+        marginRight : "auto"
+      }} onClick={() => setShowToolsFlag(!showToolsFlag)}>{showToolsFlag ? "↑" : "↓"}</button>
     </div>
   );
 }
