@@ -19,6 +19,10 @@ enum Tab {
   SETTINGS = "Settings"
 }
 
+interface SelectionConstraint {
+
+}
+
 function App() {
   const buttonData : Record<Tab, ButtonData> = {
     [Tab.IMPORT_EXPORT] : {
@@ -42,10 +46,8 @@ function App() {
   const [outputFileExtension, setOutputFileExtension] = useState<string>("");
   const inputFileReaders : Record<string, FileReader> = {
     "xrna" : (_ : string) => {
-      console.log("Reading XRNA input file.");
     },
     "str" : (_ : string) => {
-      console.log("Reading str input file.");
     }
   };
   const [downloadAnchorHref, setDownloadAnchorHref] = useState<string>();
@@ -53,6 +55,50 @@ function App() {
     "json" : () => "This is a JSON file.",
     "xrna" : () => "This is an XRNA file.",
     "svg" : () => "This is an SVG file."
+  };
+  const selectionConstraints : Record<string, SelectionConstraint> = {
+    "RNA Single Nucleotide" : {
+
+    },
+    "RNA Single Strand" : {
+
+    },
+    "RNA Single Base Pair" : {
+
+    },
+    "RNA Helix" : {
+
+    },
+    "RNA Stacked Helix" : {
+
+    },
+    "RNA Sub-domain" : {
+
+    },
+    "RNA Cycle" : {
+
+    },
+    "RNA List Nucs" : {
+
+    },
+    "RNA Strand" : {
+
+    },
+    "RNA Color Unit" : {
+
+    },
+    "RNA Named Group" : {
+
+    },
+    "RNA Strand Group" : {
+
+    },
+    "Labels Only" : {
+
+    },
+    "Entire Scene" : {
+
+    }
   };
   const outputFileExtensionSelectRef = createRef<HTMLSelectElement>();
   const downloadAnchorRef = createRef<HTMLAnchorElement>();
@@ -64,7 +110,12 @@ function App() {
   useEffect(() => {
     (downloadAnchorRef.current as HTMLAnchorElement).click();
   }, [downloadAnchorHref]);
-  return ( 
+  const [zoomExponent, setZoomExponent] = useState<number>(0);
+  const [zoom, setZoom] = useState<number>(1);
+  const minimumZoomExponent = -50;
+  const maximumZoomExponent = 50;
+  const zoomBase = 1.1;
+  return (
     <div style={{
       border : showTabReminderFlag ? "ridge " + (buttonData[currentTab] as ButtonData).highlightColor : "none" ,
       color : "white"
@@ -76,15 +127,15 @@ function App() {
         {Object.entries(buttonData).map(([tabName, buttonDatum]) => {
           return <button style={{
             border : "groove gray",
-            color : currentTab == tabName ? "white" : "black",
-            backgroundColor : currentTab == tabName ? buttonDatum.highlightColor : "white"
+            color : currentTab === tabName ? "white" : "black",
+            backgroundColor : currentTab === tabName ? buttonDatum.highlightColor : "white"
           }} key={tabName} onClick={() => setCurrentTab(tabName as Tab)}>{tabName}</button>;
         })}
         <div style={{
-          display : currentTab == Tab.IMPORT_EXPORT ? "block" : "none"
+          display : currentTab === Tab.IMPORT_EXPORT ? "block" : "none"
         }}>
           <label>
-            Upload an input file:&nbsp;
+            Upload an input file&nbsp;
             <input type="file" accept={Object.keys(inputFileReaders).map(inputFileExtension => "." + inputFileExtension).join(",")} onChange={event => {
               let files = event.target.files;
               if (files && files.length > 0) {
@@ -97,13 +148,12 @@ function App() {
                 if (copyInputFileExtensionToOutputFileExtensionFlag) {
                   let newSelectedIndex = Array.from((outputFileExtensionSelectRef.current as HTMLSelectElement).children).findIndex(child => child.getAttribute("value") === outputFileExtension);
                   (outputFileExtensionSelectRef.current as HTMLSelectElement).selectedIndex = newSelectedIndex;
-                  setOutputFileExtension(newSelectedIndex == -1 ? "" : outputFileExtension);
+                  setOutputFileExtension(newSelectedIndex === -1 ? "" : outputFileExtension);
                 }
                 let reader = new FileReader();
                 reader.addEventListener("load", event => {
                   // Read the content of the input file.
-                  let inputFileContent = (event.target as globalThis.FileReader).result as string;
-                  (inputFileReaders[outputFileExtension] as FileReader)(inputFileContent);
+                  (inputFileReaders[outputFileExtension] as FileReader)((event.target as globalThis.FileReader).result as string);
                 });
                 reader.readAsText(files[0] as File);
               }
@@ -111,7 +161,7 @@ function App() {
           </label>
           <br />
           <label>
-            Create a downloadable output file:&nbsp;
+            Create a downloadable output file&nbsp;
             <input type="text" value={outputFileName} onChange={event => setOutputFileName(event.target.value)}></input>
           </label>
           <select onChange={event => setOutputFileExtension(event.target.value)} ref={outputFileExtensionSelectRef}>
@@ -127,20 +177,20 @@ function App() {
           }} disabled={!outputFileName || !outputFileExtension}>Download</button>
         </div>
         <div style={{
-          display : currentTab == Tab.EDIT ? "block" : "none"
+          display : currentTab === Tab.EDIT ? "block" : "none"
         }}>
 
         </div>
         <div style={{
-          display : currentTab == Tab.ANNOTATE ? "block" : "none"
+          display : currentTab === Tab.ANNOTATE ? "block" : "none"
         }}>
 
         </div>
         <div style={{
-          display : currentTab == Tab.SETTINGS ? "block" : "none"
+          display : currentTab === Tab.SETTINGS ? "block" : "none"
         }}>
           <label>
-            Show tab reminder: 
+            Show tab reminder&nbsp;
             <input type="checkbox" onChange={() => setShowTabReminderFlag(!showTabReminderFlag)} checked={showTabReminderFlag}></input>
           </label>
           <br />
@@ -149,10 +199,32 @@ function App() {
             <input type="checkbox" onChange={() => setCopyInputFileNameToOutputFileNameFlag(!copyInputFileNameToOutputFileNameFlag)} checked={copyInputFileNameToOutputFileNameFlag}></input>
           </label>
           <label>
-            &nbsp;and extension
+            &nbsp;and extension&nbsp;
             <input type="checkbox" onChange={() => setCopyInputFileExtensionToOutputFileExtensionFlag(!copyInputFileExtensionToOutputFileExtensionFlag)} checked={copyInputFileExtensionToOutputFileExtensionFlag}></input>
           </label>
         </div>
+        <label>
+          Selection Constraint&nbsp;
+          <select>
+            {Object.entries(selectionConstraints).map(([key, ]) => {
+              return <option key={key}>{key}</option>
+            })}
+          </select>
+        </label>
+        <br />
+        <label>
+          Zoom&nbsp;
+          <input type="range" value={zoomExponent} min={minimumZoomExponent} max={maximumZoomExponent} onChange={event => {
+            let newZoomExponent = Number.parseInt((event.target as HTMLInputElement).value);
+            setZoomExponent(newZoomExponent);
+            setZoom(Math.pow(zoomBase, newZoomExponent));
+          }}></input>
+          <input type="number" value={zoom} onChange={event => {
+            let newZoom = Number.parseFloat(event.target.value);
+            setZoom(newZoom);
+            setZoomExponent(Math.log(newZoom) / Math.log(zoomBase));
+          }} step={0.01}></input>
+        </label>
       </div>
     </div>
   );
