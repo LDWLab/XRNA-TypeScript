@@ -1,27 +1,19 @@
 import { useState, createRef, useEffect } from 'react'
 import { useResizeDetector } from 'react-resize-detector';
+import inputFileReaders, { type FileReader } from './inputUI';
+import outputFileWriters, { type FileWriter } from './outputUI';
+import { RNAMolecule } from './RNAMolecule';
+import selectionConstraints from './selectionConstraints';
 
 type ButtonData = {
   highlightColor : string
 };
-
-interface FileReader {
-  (inputFileContent : string) : void;
-}
-
-interface FileGenerator {
-  () : string;
-}
 
 enum Tab {
   IMPORT_EXPORT = "Import/Export",
   EDIT = "Edit",
   ANNOTATE = "Annotate",
   SETTINGS = "Settings"
-}
-
-interface SelectionConstraint {
-
 }
 
 function App() {
@@ -45,82 +37,6 @@ function App() {
   const [copyInputFileNameToOutputFileNameFlag, setCopyInputFileNameToOutputFileNameFlag] = useState<boolean>(true);
   const [copyInputFileExtensionToOutputFileExtensionFlag, setCopyInputFileExtensionToOutputFileExtensionFlag] = useState<boolean>(true);
   const [outputFileExtension, setOutputFileExtension] = useState<string>("");
-  const inputFileReaders : Record<string, FileReader> = {
-    "xrna" : (_ : string) => {
-
-    },
-    "xml" : (_ : string) => {
-
-    },
-    "ps" : (_ : string) => {
-
-    },
-    "ss" : (_ : string) => {
-
-    },
-    "str" : (_ : string) => {
-
-    },
-    "svg" : (_ : string) => {
-
-    },
-    "json" : (_ : string) => {
-      
-    }
-  };
-  const outputFileGenerators : Record<string, FileGenerator> = {
-    "xrna" : () => "This is an XRNA file.",
-    "svg" : () => "This is an SVG file.",
-    "tr" : () => "This is a TR file.",
-    "csv" : () => "This is a CSV file.",
-    "bpseq" : () => "This is a BPSeq file.",
-    "jpg" : () => "This is a JPG file.",
-    "json" : () => "This is a JSON file."
-  };
-  const selectionConstraints : Record<string, SelectionConstraint> = {
-    "RNA Single Nucleotide" : {
-
-    },
-    "RNA Single Strand" : {
-
-    },
-    "RNA Single Base Pair" : {
-
-    },
-    "RNA Helix" : {
-
-    },
-    "RNA Stacked Helix" : {
-
-    },
-    "RNA Sub-domain" : {
-
-    },
-    "RNA Cycle" : {
-
-    },
-    "RNA List Nucs" : {
-
-    },
-    "RNA Strand" : {
-
-    },
-    "RNA Color Unit" : {
-
-    },
-    "RNA Named Group" : {
-
-    },
-    "RNA Strand Group" : {
-
-    },
-    "Labels Only" : {
-
-    },
-    "Entire Scene" : {
-
-    }
-  };
   const [downloadAnchorHref, setDownloadAnchorHref] = useState<string>();
   const outputFileExtensionSelectRef = createRef<HTMLSelectElement>();
   const downloadAnchorRef = createRef<HTMLAnchorElement>();
@@ -144,6 +60,8 @@ function App() {
   const [invertColorsInOutputFileFlag, setInvertColorsInOutputFileFlag] = useState<boolean>(false);
   // In pixels
   const tabReminderBorderWidth = 6;
+  const rnaMolecules = new Array<JSX.Element>();
+  rnaMolecules.push(<RNAMolecule/>)
   return (
     <div style={{
       border : showTabReminderFlag ? `solid ${(buttonData[currentTab] as ButtonData).highlightColor} 6px` : "none" ,
@@ -201,7 +119,7 @@ function App() {
               <input type="text" value={outputFileName} onChange={event => setOutputFileName(event.target.value)} />
             </label>
             <select onChange={event => setOutputFileExtension(event.target.value)} ref={outputFileExtensionSelectRef}>
-              {Object.entries(outputFileGenerators).map(([fileExtension, ]) => {
+              {Object.entries(outputFileWriters).map(([fileExtension, ]) => {
                 return <option key={fileExtension} value={fileExtension}>{"." + fileExtension}</option>
               })}
             </select>
@@ -209,7 +127,7 @@ function App() {
               display : "none"
             }} ref={downloadAnchorRef}></a>
             <button onClick={() => {
-              setDownloadAnchorHref(`data:text/plain;charset=utf-8,${encodeURIComponent((outputFileGenerators[outputFileExtension] as FileGenerator)())}`);
+              setDownloadAnchorHref(`data:text/plain;charset=utf-8,${encodeURIComponent((outputFileWriters[outputFileExtension] as FileWriter)())}`);
             }} disabled={!outputFileName || !outputFileExtension}>Download</button>
           </div>
           <div style={{
@@ -288,14 +206,15 @@ function App() {
         }} onClick={() => setShowToolsFlag(!showToolsFlag)}>{showToolsFlag ? "↑" : "↓"}</button>
         
       </div>
-      <svg viewBox="0 0 100 100" style={{
+      <svg viewBox={`0 0 ${parentDivDimensionsWatcher.width} ${(parentDivDimensionsWatcher.height as number) - (bannerDivDimensionsWatcher.height as number)}`} version="1.1" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" style={{
         backgroundColor : darkModeFlag ? "black" : "white",
         display : "block",
-        flexGrow : 1,
         width : "100%",
         height : (parentDivDimensionsWatcher.height as number) - (bannerDivDimensionsWatcher.height as number),
         position : "absolute"
-      }}></svg>
+      }}>
+        {rnaMolecules}
+      </svg>
     </div>
   );
 }
