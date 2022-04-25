@@ -1,4 +1,5 @@
 import { useState, createRef, useEffect } from 'react'
+import { useResizeDetector } from 'react-resize-detector';
 
 type ButtonData = {
   highlightColor : string
@@ -137,128 +138,164 @@ function App() {
   const maximumZoomExponent = 50;
   const zoomBase = 1.1;
   const [showToolsFlag, setShowToolsFlag] = useState<boolean>(true);
+  const parentDivDimensionsWatcher = useResizeDetector();
+  const bannerDivDimensionsWatcher = useResizeDetector();
+  const [darkModeFlag, setDarkModeFlag] = useState<boolean>(false);
+  const [invertColorsInOutputFileFlag, setInvertColorsInOutputFileFlag] = useState<boolean>(false);
+  // In pixels
+  const tabReminderBorderWidth = 6;
   return (
     <div style={{
-      border : showTabReminderFlag ? "ridge " + (buttonData[currentTab] as ButtonData).highlightColor : "none" ,
+      border : showTabReminderFlag ? `solid ${(buttonData[currentTab] as ButtonData).highlightColor} 6px` : "none" ,
       color : "white",
       padding : 0,
       margin : 0,
-      backgroundColor : "rgb(54, 64, 79)"
-    }}>
-      <div style={{
-        display : showToolsFlag ? "block" : "none"
-      }}>
-        {Object.entries(buttonData).map(([tabName, buttonDatum]) => {
-          return <button style={{
-            border : "groove gray",
-            color : currentTab === tabName ? "white" : "black",
-            backgroundColor : currentTab === tabName ? buttonDatum.highlightColor : "white"
-          }} key={tabName} onClick={() => setCurrentTab(tabName as Tab)}>{tabName}</button>;
-        })}
+      backgroundColor : "rgb(54, 64, 79)",
+      width : showTabReminderFlag ? `calc(100% - ${2 * tabReminderBorderWidth}px)` : "100%",
+      height : showTabReminderFlag ? `calc(100% - ${2 * tabReminderBorderWidth}px)` : "100%",
+      position : "absolute",
+      display : "block"
+    }} ref={parentDivDimensionsWatcher.ref}>
+      <div ref={bannerDivDimensionsWatcher.ref}>
         <div style={{
-          display : currentTab === Tab.IMPORT_EXPORT ? "block" : "none"
+          display : showToolsFlag ? "block" : "none"
         }}>
+          {Object.entries(buttonData).map(([tabName, buttonDatum]) => {
+            return <button style={{
+              border : "groove gray",
+              color : currentTab === tabName ? "white" : "black",
+              backgroundColor : currentTab === tabName ? buttonDatum.highlightColor : "white"
+            }} key={tabName} onClick={() => setCurrentTab(tabName as Tab)}>{tabName}</button>;
+          })}
+          <div style={{
+            display : currentTab === Tab.IMPORT_EXPORT ? "block" : "none"
+          }}>
+            <label>
+              Upload an input file&nbsp;
+              <input type="file" accept={Object.keys(inputFileReaders).map(inputFileExtension => "." + inputFileExtension).join(",")} onChange={event => {
+                let files = event.target.files;
+                if (files && files.length > 0) {
+                  let inputFileName = (files[0] as File).name;
+                  let lastIndexOfPeriod = inputFileName.lastIndexOf(".");
+                  if (copyInputFileNameToOutputFileNameFlag) {
+                    setOutputFileName(inputFileName.substring(0, lastIndexOfPeriod));
+                  }
+                  let outputFileExtension = inputFileName.substring(lastIndexOfPeriod + 1);
+                  if (copyInputFileExtensionToOutputFileExtensionFlag) {
+                    let newSelectedIndex = Array.from((outputFileExtensionSelectRef.current as HTMLSelectElement).children).findIndex(child => child.getAttribute("value") === outputFileExtension);
+                    (outputFileExtensionSelectRef.current as HTMLSelectElement).selectedIndex = newSelectedIndex;
+                    setOutputFileExtension(newSelectedIndex === -1 ? "" : outputFileExtension);
+                  }
+                  let reader = new FileReader();
+                  reader.addEventListener("load", event => {
+                    // Read the content of the input file.
+                    (inputFileReaders[outputFileExtension] as FileReader)((event.target as globalThis.FileReader).result as string);
+                  });
+                  reader.readAsText(files[0] as File);
+                }
+              }}/>
+            </label>
+            <br />
+            <label>
+              Create a downloadable output file&nbsp;
+              <input type="text" value={outputFileName} onChange={event => setOutputFileName(event.target.value)} />
+            </label>
+            <select onChange={event => setOutputFileExtension(event.target.value)} ref={outputFileExtensionSelectRef}>
+              {Object.entries(outputFileGenerators).map(([fileExtension, ]) => {
+                return <option key={fileExtension} value={fileExtension}>{"." + fileExtension}</option>
+              })}
+            </select>
+            <a href={downloadAnchorHref} download={outputFileName + "." + outputFileExtension} style={{
+              display : "none"
+            }} ref={downloadAnchorRef}></a>
+            <button onClick={() => {
+              setDownloadAnchorHref(`data:text/plain;charset=utf-8,${encodeURIComponent((outputFileGenerators[outputFileExtension] as FileGenerator)())}`);
+            }} disabled={!outputFileName || !outputFileExtension}>Download</button>
+          </div>
+          <div style={{
+            display : currentTab === Tab.EDIT ? "block" : "none"
+          }}>
+
+          </div>
+          <div style={{
+            display : currentTab === Tab.ANNOTATE ? "block" : "none"
+          }}>
+
+          </div>
+          <div style={{
+            display : currentTab === Tab.SETTINGS ? "block" : "none"
+          }}>
+            <label>
+              Show tab reminder&nbsp;
+              <input type="checkbox" onChange={() => setShowTabReminderFlag(!showTabReminderFlag)} checked={showTabReminderFlag} />
+            </label>
+            <br />
+            <label>
+              Copy input-file name and extension to output-file name&nbsp;
+              <input type="checkbox" onChange={() => {
+                setCopyInputFileNameToOutputFileNameFlag(!copyInputFileNameToOutputFileNameFlag);
+                setCopyInputFileExtensionToOutputFileExtensionFlag(!copyInputFileNameToOutputFileNameFlag);
+              }} checked={copyInputFileNameToOutputFileNameFlag} />
+            </label>
+            <label>
+              &nbsp;and extension&nbsp;
+              <input type="checkbox" onChange={() => setCopyInputFileExtensionToOutputFileExtensionFlag(!copyInputFileExtensionToOutputFileExtensionFlag)} checked={copyInputFileExtensionToOutputFileExtensionFlag} />
+            </label>
+            <br />
+            <label>
+              Dark mode (invert colors) in viewer&nbsp;
+              <input type="checkbox" onChange={() => {
+                setDarkModeFlag(!darkModeFlag);
+                setInvertColorsInOutputFileFlag(!darkModeFlag);
+              }} checked={darkModeFlag} />
+            </label>
+            <label>
+            &nbsp;and in output file(s)&nbsp;
+              <input type="checkbox" onChange={() => setInvertColorsInOutputFileFlag(!invertColorsInOutputFileFlag)} checked={invertColorsInOutputFileFlag} />
+            </label>
+          </div>
           <label>
-            Upload an input file&nbsp;
-            <input type="file" accept={Object.keys(inputFileReaders).map(inputFileExtension => "." + inputFileExtension).join(",")} onChange={event => {
-              let files = event.target.files;
-              if (files && files.length > 0) {
-                let inputFileName = (files[0] as File).name;
-                let lastIndexOfPeriod = inputFileName.lastIndexOf(".");
-                if (copyInputFileNameToOutputFileNameFlag) {
-                  setOutputFileName(inputFileName.substring(0, lastIndexOfPeriod));
-                }
-                let outputFileExtension = inputFileName.substring(lastIndexOfPeriod + 1);
-                if (copyInputFileExtensionToOutputFileExtensionFlag) {
-                  let newSelectedIndex = Array.from((outputFileExtensionSelectRef.current as HTMLSelectElement).children).findIndex(child => child.getAttribute("value") === outputFileExtension);
-                  (outputFileExtensionSelectRef.current as HTMLSelectElement).selectedIndex = newSelectedIndex;
-                  setOutputFileExtension(newSelectedIndex === -1 ? "" : outputFileExtension);
-                }
-                let reader = new FileReader();
-                reader.addEventListener("load", event => {
-                  // Read the content of the input file.
-                  (inputFileReaders[outputFileExtension] as FileReader)((event.target as globalThis.FileReader).result as string);
-                });
-                reader.readAsText(files[0] as File);
-              }
-            }}></input>
+            Selection Constraint&nbsp;
+            <select>
+              {Object.entries(selectionConstraints).map(([key, ]) => {
+                return <option key={key}>{key}</option>
+              })}
+            </select>
           </label>
           <br />
           <label>
-            Create a downloadable output file&nbsp;
-            <input type="text" value={outputFileName} onChange={event => setOutputFileName(event.target.value)}></input>
-          </label>
-          <select onChange={event => setOutputFileExtension(event.target.value)} ref={outputFileExtensionSelectRef}>
-            {Object.entries(outputFileGenerators).map(([fileExtension, ]) => {
-              return <option key={fileExtension} value={fileExtension}>{"." + fileExtension}</option>
-            })}
-          </select>
-          <a href={downloadAnchorHref} download={outputFileName + "." + outputFileExtension} style={{
-            display : "none"
-          }} ref={downloadAnchorRef}></a>
-          <button onClick={() => {
-            setDownloadAnchorHref(`data:text/plain;charset=utf-8,${encodeURIComponent((outputFileGenerators[outputFileExtension] as FileGenerator)())}`);
-          }} disabled={!outputFileName || !outputFileExtension}>Download</button>
-        </div>
-        <div style={{
-          display : currentTab === Tab.EDIT ? "block" : "none"
-        }}>
-
-        </div>
-        <div style={{
-          display : currentTab === Tab.ANNOTATE ? "block" : "none"
-        }}>
-
-        </div>
-        <div style={{
-          display : currentTab === Tab.SETTINGS ? "block" : "none"
-        }}>
-          <label>
-            Show tab reminder&nbsp;
-            <input type="checkbox" onChange={() => setShowTabReminderFlag(!showTabReminderFlag)} checked={showTabReminderFlag}></input>
-          </label>
-          <br />
-          <label>
-            Copy input-file name and extension to output-file name&nbsp;
-            <input type="checkbox" onChange={() => setCopyInputFileNameToOutputFileNameFlag(!copyInputFileNameToOutputFileNameFlag)} checked={copyInputFileNameToOutputFileNameFlag}></input>
-          </label>
-          <label>
-            &nbsp;and extension&nbsp;
-            <input type="checkbox" onChange={() => setCopyInputFileExtensionToOutputFileExtensionFlag(!copyInputFileExtensionToOutputFileExtensionFlag)} checked={copyInputFileExtensionToOutputFileExtensionFlag}></input>
+            Zoom&nbsp;
+            <input type="range" value={zoomExponent} min={minimumZoomExponent} max={maximumZoomExponent} onChange={event => {
+              let newZoomExponent = Number.parseInt((event.target as HTMLInputElement).value);
+              setZoomExponent(newZoomExponent);
+              setZoom(Math.pow(zoomBase, newZoomExponent));
+            }}/>
+            <input type="number" value={zoom} onChange={event => {
+              let newZoom = Number.parseFloat(event.target.value);
+              setZoom(newZoom);
+              setZoomExponent(Math.log(newZoom) / Math.log(zoomBase));
+            }} step={0.01}/>
           </label>
         </div>
-        <label>
-          Selection Constraint&nbsp;
-          <select>
-            {Object.entries(selectionConstraints).map(([key, ]) => {
-              return <option key={key}>{key}</option>
-            })}
-          </select>
-        </label>
-        <br />
-        <label>
-          Zoom&nbsp;
-          <input type="range" value={zoomExponent} min={minimumZoomExponent} max={maximumZoomExponent} onChange={event => {
-            let newZoomExponent = Number.parseInt((event.target as HTMLInputElement).value);
-            setZoomExponent(newZoomExponent);
-            setZoom(Math.pow(zoomBase, newZoomExponent));
-          }}></input>
-          <input type="number" value={zoom} onChange={event => {
-            let newZoom = Number.parseFloat(event.target.value);
-            setZoom(newZoom);
-            setZoomExponent(Math.log(newZoom) / Math.log(zoomBase));
-          }} step={0.01}></input>
-        </label>
+        <button style={{
+          color : "white",
+          backgroundColor : "inherit",
+          border : "groove gray",
+          width : "10%",
+          display : "block",
+          marginLeft : "auto",
+          marginRight : "auto"
+        }} onClick={() => setShowToolsFlag(!showToolsFlag)}>{showToolsFlag ? "↑" : "↓"}</button>
+        
       </div>
-      <button style={{
-        color : "white",
-        backgroundColor : "inherit",
-        border : "groove gray",
-        width : "10%",
+      <svg viewBox="0 0 100 100" style={{
+        backgroundColor : darkModeFlag ? "black" : "white",
         display : "block",
-        marginLeft : "auto",
-        marginRight : "auto"
-      }} onClick={() => setShowToolsFlag(!showToolsFlag)}>{showToolsFlag ? "↑" : "↓"}</button>
+        flexGrow : 1,
+        width : "100%",
+        height : (parentDivDimensionsWatcher.height as number) - (bannerDivDimensionsWatcher.height as number),
+        position : "absolute"
+      }}></svg>
     </div>
   );
 }
