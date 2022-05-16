@@ -28,12 +28,24 @@ class Vector2D {
     );
   }
 
+  public static scaleDown(v : Vector2D, scalar : number) : Vector2D {
+    return Vector2D.scaleUp(v, 1.0 / scalar);
+  }
+
   public static interpolate(v0 : Vector2D, v1 : Vector2D, interpolationFactor : number) : Vector2D {
     let oneMinusInterpolationFactor = 1 - interpolationFactor;
     return {
       x : oneMinusInterpolationFactor * v0.x + interpolationFactor * v1.x,
       y : oneMinusInterpolationFactor * v0.y + interpolationFactor * v1.y
     };
+  }
+
+  public static magnitudeSquared(v : Vector2D) : number {
+    return v.x * v.x + v.y * v.y;
+  }
+
+  public static magnitude(v : Vector2D) : number {
+    return Math.sqrt(Vector2D.magnitudeSquared(v));
   }
 }
 

@@ -8,31 +8,21 @@ import { RNAMolecule } from './RNAMolecule';
 import { BasePairType, Nucleotide } from './Nucleotide';
 import { Vector2D } from './Vector2D';
 
-type ButtonData = {
-  highlightColor : string
-};
-
 enum Tab {
   IMPORT_EXPORT = "Import/Export",
   EDIT = "Edit",
+  FORMAT = "Format",
   ANNOTATE = "Annotate",
   SETTINGS = "Settings"
 }
 
 function App() {
-  const buttonData : Record<Tab, ButtonData> = {
-    [Tab.IMPORT_EXPORT] : {
-      highlightColor : "rgb(24, 98, 24)"
-    },
-    [Tab.EDIT] : {
-      highlightColor : "rgb(204, 85, 0)"
-    },
-    [Tab.ANNOTATE] : {
-      highlightColor : "rgb(34, 34, 139)"
-    },
-    [Tab.SETTINGS] : {
-      highlightColor : "purple"
-    }
+  const tabColors : Record<Tab, string> = {
+    [Tab.IMPORT_EXPORT] : "rgb(24, 98, 24)",
+    [Tab.EDIT] : "rgb(204, 85, 0)",
+    [Tab.FORMAT] : "rgb(124, 0, 0)",
+    [Tab.ANNOTATE] : "rgb(34, 34, 139)",
+    [Tab.SETTINGS] : "purple"
   };
   const [currentTab, setCurrentTab] = useState<Tab>(Tab.IMPORT_EXPORT);
   const [showTabReminderFlag, setShowTabReminderFlag] = useState<boolean>(true);
@@ -53,6 +43,7 @@ function App() {
   }, [downloadAnchorHref]);
   const [zoomExponent, setZoomExponent] = useState<number>(0);
   const [zoom, setZoom] = useState<number>(1);
+  const [roundedZoom, setRoundedZoom] = useState(`${Math.round(zoom)}`);
   const zoomBase = 1.1;
   const [showToolsFlag, setShowToolsFlag] = useState<boolean>(true);
   const parentDivDimensionsWatcher = useResizeDetector();
@@ -62,13 +53,13 @@ function App() {
   // In pixels
   const tabReminderBorderWidth = 6;
   const [svgContent, setSvgContent] = useState<JSX.Element>(<g id="svgContent"></g>);
-  const [svgTranslate, setSvgTranslate] = useState({x : 0, y : 0});
+  const [svgContentOrigin, setSvgContentOrigin] = useState({x : 0, y : 0});
   useEffect(() => {
     let svgContentHtml = document.getElementById("svgContent") as HTMLElement;
     let svgContentBoundingClientRect = svgContentHtml.getBoundingClientRect();
     let svgHtml = document.getElementById("svg") as HTMLElement;
     let svgBoundingClientRect = svgHtml.getBoundingClientRect();
-    setSvgTranslate({
+    setSvgContentOrigin({
       x : svgBoundingClientRect.x - svgContentBoundingClientRect.x,
       y : svgBoundingClientRect.y - svgContentBoundingClientRect.y
     });
@@ -82,14 +73,25 @@ function App() {
       textElement.setAttribute("y", `${Number.parseFloat(textElement.getAttribute("y") ?? "0") + (boundingRect.height / 4)}`);
     });
   }, [svgContent]);
+  useEffect(() => {
+    (document.getElementById("svgContent") as HTMLElement).style.display = "block";
+  }, [svgContentOrigin]);
   const [svgHeight, setSvgHeight] = useState(0);
   const [svgContentDimensions, setSvgContentDimensions] = useState({width : 1, height : 1});
   useEffect(() => {
     setSvgHeight((parentDivDimensionsWatcher.height as number) - (bannerDivDimensionsWatcher.height as number));
   }, [parentDivDimensionsWatcher.height, bannerDivDimensionsWatcher.height]);
+  const [svgTranslateFromDrag, setSvgTranslateFromDrag] = useState(new Vector2D(0, 0));
+  const [svgTranslate, setSvgTranslate] = useState(new Vector2D(0, 0));
+  const [dragStart, setDragStart] = useState<Vector2D | null>(null);
+  function handleMouseUp() {
+    setSvgTranslate(Vector2D.add(svgTranslate, svgTranslateFromDrag));
+    setSvgTranslateFromDrag(new Vector2D(0, 0));
+    setDragStart(null);
+  }
   return (
     <div style={{
-      border : showTabReminderFlag ? `solid ${(buttonData[currentTab] as ButtonData).highlightColor} 6px` : "none" ,
+      border : showTabReminderFlag ? `solid ${tabColors[currentTab]} 6px` : "none" ,
       color : "white",
       padding : 0,
       margin : 0,
@@ -103,11 +105,11 @@ function App() {
         <div style={{
           display : showToolsFlag ? "block" : "none"
         }}>
-          {Object.entries(buttonData).map(([tabName, buttonDatum]) => {
+          {Object.entries(tabColors).map(([tabName, buttonDatum]) => {
             return <button style={{
               border : "groove gray",
               color : currentTab === tabName ? "white" : "black",
-              backgroundColor : currentTab === tabName ? buttonDatum.highlightColor : "white"
+              backgroundColor : currentTab === tabName ? buttonDatum : "white"
             }} key={tabName} onClick={() => setCurrentTab(tabName as Tab)}>{tabName}</button>;
           })}
           <div style={{
@@ -133,7 +135,7 @@ function App() {
                   reader.addEventListener("load", event => {
                     // Read the content of the input file.
                     let parsedInput = (inputFileReaders[outputFileExtension] as FileReader)((event.target as globalThis.FileReader).result as string);
-                    let newSvg = <g id="svgContent">
+                    let newSvgContent = <g id="svgContent">
                     {
                       parsedInput.rnaComplexes.map((rnaComplex : RNAComplex, index : number) => <g key={index} transform="scale(1 -1)">
                       {
@@ -150,14 +152,28 @@ function App() {
                                 }} key="symbol">{nucleotide.symbol}</text>
                               ];
                               if (nucleotide.basePair !== null) {
+                                let basePairNucleotide = (rnaComplex.rnaMolecules[nucleotide.basePair.rnaMoleculeIndex] as RNAMolecule).nucleotidesMap[nucleotide.basePair.nucleotideIndex] as Nucleotide;
+                                let difference = Vector2D.subtract(basePairNucleotide.position, nucleotide.position);
                                 switch (nucleotide.basePair.type) {
                                   case BasePairType.CANONICAL: {
-                                    let basePairNucleotide = (rnaComplex.rnaMolecules[nucleotide.basePair.rnaMoleculeIndex] as RNAMolecule).nucleotidesMap[nucleotide.basePair.nucleotideIndex] as Nucleotide;
-                                    let difference = Vector2D.subtract(basePairNucleotide.position, nucleotide.position);
                                     let interpolatedNucleotidePosition = Vector2D.scaleUp(difference, 0.3);
                                     let interpolatedBasePairNucleotidePosition = Vector2D.scaleUp(difference, 0.7)
                                     elements.push(
-                                      <line x1={interpolatedNucleotidePosition.x} y1={interpolatedNucleotidePosition.y} x2={interpolatedBasePairNucleotidePosition.x} y2={interpolatedBasePairNucleotidePosition.y} stroke="black" key="bondLine" strokeWidth="0.2"/>
+                                      <line x1={interpolatedNucleotidePosition.x} y1={interpolatedNucleotidePosition.y} x2={interpolatedBasePairNucleotidePosition.x} y2={interpolatedBasePairNucleotidePosition.y} stroke="black" key="bondSymbol" strokeWidth="0.2"/>
+                                    );
+                                    break;
+                                  }
+                                  case BasePairType.WOBBLE: {
+                                    let center = Vector2D.scaleUp(difference, 0.5);
+                                    elements.push(
+                                      <circle cx={center.x} cy={center.y} fill="black" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
+                                    );
+                                    break;
+                                  }
+                                  case BasePairType.MISMATCH: {
+                                    let center = Vector2D.scaleUp(difference, 0.5);
+                                    elements.push(
+                                      <circle cx={center.x} cy={center.y} fill="none" stroke="black" strokeWidth="0.2" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
                                     );
                                     break;
                                   }
@@ -178,8 +194,9 @@ function App() {
                       }
                       </g>)
                     }
-                  </g>
-                    setSvgContent(newSvg);
+                  </g>;
+                    (document.getElementById("svgContent") as HTMLElement).style.display = "none";
+                    setSvgContent(newSvgContent);
                   });
                   reader.readAsText(files[0] as File);
                 }
@@ -205,12 +222,14 @@ function App() {
           <div style={{
             display : currentTab === Tab.EDIT ? "block" : "none"
           }}>
-
+          </div>
+          <div style={{
+            display : currentTab === Tab.FORMAT ? "block" : "none"
+          }}>
           </div>
           <div style={{
             display : currentTab === Tab.ANNOTATE ? "block" : "none"
           }}>
-
           </div>
           <div style={{
             display : currentTab === Tab.SETTINGS ? "block" : "none"
@@ -258,14 +277,25 @@ function App() {
             <input type="range" value={zoomExponent} min={-50} max={50} onChange={event => {
               let newZoomExponent = Number.parseInt((event.target as HTMLInputElement).value);
               setZoomExponent(newZoomExponent);
-              setZoom(Math.pow(zoomBase, newZoomExponent));
-            }}/>
-            <input type="number" value={zoom} onChange={event => {
-              let newZoom = Number.parseFloat(event.target.value);
+              let newZoom = Math.pow(zoomBase, newZoomExponent);
               setZoom(newZoom);
-              setZoomExponent(Math.log(newZoom) / Math.log(zoomBase));
+              setRoundedZoom(newZoom.toFixed(2));
+            }}/>
+            <input type="number" value={roundedZoom} onChange={event => {
+              let newZoom = Number.parseFloat(event.target.value);
+              if (!Number.isNaN(newZoom)) {
+                setZoom(newZoom);
+                setZoomExponent(Math.log(newZoom) / Math.log(zoomBase));
+              }
+              setRoundedZoom(event.target.value);
             }} step={0.01}/>
           </label>
+          <button onClick={() => {
+            setZoomExponent(0);
+            setZoom(1);
+            setRoundedZoom("1");
+            setSvgTranslate(new Vector2D(0, 0));
+          }}>Rest View</button>
         </div>
         <button style={{
           color : "white",
@@ -279,13 +309,20 @@ function App() {
         
       </div>
       <svg id="svg" viewBox={`0 0 ${parentDivDimensionsWatcher.width ?? 0} ${svgHeight}`} version="1.1" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" style={{
-        backgroundColor : invertColorsInViewFlag ? "black" : "white",
         display : "block",
         width : "100%",
         height : svgHeight,
         position : "absolute"
-      }}>
-        <g transform={`scale(${zoom * Math.min((parentDivDimensionsWatcher.width ?? 1) / svgContentDimensions.width, svgHeight / svgContentDimensions.height)}) translate(${svgTranslate.x} ${svgTranslate.y})`}>
+      }} onMouseDown={mouseEvent => {
+        setDragStart(new Vector2D(mouseEvent.clientX, mouseEvent.clientY));
+      }} onMouseMove={event => {
+        if (dragStart !== null) {
+          setSvgTranslateFromDrag(new Vector2D(event.clientX - dragStart.x, event.clientY - dragStart.y));
+        }
+      }} onMouseLeave={handleMouseUp}
+      onMouseUp={handleMouseUp}>
+        <rect width="100%" height="100%" fill={invertColorsInViewFlag ? "black" : "white"}/>
+        <g transform={`translate(${svgTranslate.x + svgTranslateFromDrag.x} ${svgTranslate.y + svgTranslateFromDrag.y}) scale(${zoom * Math.min((parentDivDimensionsWatcher.width ?? 1) / svgContentDimensions.width, svgHeight / svgContentDimensions.height)}) translate(${svgContentOrigin.x} ${svgContentOrigin.y})`}>
           {svgContent}
         </g>
       </svg>
