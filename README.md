@@ -1,46 +1,40 @@
-# Getting Started with Create React App
+# How to Compile XRNA:
+1. Open a command prompt.
+2. Navigate to the XRNA-TypeScript folder.
+3. Install necessary packages with "npm install"
+4. Compile the desired source file(s): "npm run build".
+5. The compiled build is located under ./build
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# How to Run XRNA Locally:
+1. Open a command prompt
+2. Navigate to the XRNA-TypeScript folder.
+3. Host the XRNA server: "npm start"
+4. Open XRNA within an internet browser (at URL localhost:3000 or localhost:3000/XRNA-React)
 
-## Available Scripts
+# How to Use XRNA:
+1. Open an input file within the "File input/output" tab at the top left of the screen.
+    * An example .xrna file (EC_LSU_3D_l.xrna) is included in the root directory of this project.
+2, Click on the button labeled "Upload an input file"
+    * The supported input file types are listed at the bottom right of the resulting file-selection window.
+        * These file types include .XRNA, .XML, .PS, .SS, .SVG, .JSON
+3. If desired, make changes to the input data
+    * Open the "Edit" tab to manually drag scene elements.
+        * Click on scene elements with the left mouse button and drag them about the screen.
+        * Click on scene elements with the right mouse button to inspect and edit scene-element data.
+    * Open the "Format" tab to programmatically change the topology of scene elements.
+        * Click on scene elements with the right mouse button to inspect and re-format scene-element data.
+4. Once all desired changes are complete, return to the "File input/output" tab at the top left of the screen.
+    * Change the output-file name if desired.
+    * Change the output-file extension to create an output file of a different type.
+        * All supported output-file extensions are listed in the drop-down menu to the right of the output-file-name input box.
+    * Click the "Download" button to begin the download.
+        * Once complete, the output file should appear in your computer's designated download folder.
 
-In the project directory, you can run:
+# Disambiguation:
+1. "RNA Complex" within XRNA refers to a collection of RNA Molecules which interact with (bond to) one another, and do not bond to outside RNA molecules.
 
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+# Contact(s):
+1. This TypeScript + React version of XRNA was developed by Caeden D. Meade with support from faculty and coworkers at the Georgia Institute of Technology.
+    * Email: caedenmeade@gmail.com
+    * If issues with XRNA arise (bugs, etc.), please contact me, and provide as much of a detailed description of the issue as you can.
+    * Requests (ideas) for further development are also appreciated.

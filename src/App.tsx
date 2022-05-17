@@ -52,7 +52,7 @@ function App() {
   const [invertColorsInOutputFileFlag, setInvertColorsInOutputFileFlag] = useState<boolean>(false);
   // In pixels
   const tabReminderBorderWidth = 6;
-  const [svgContent, setSvgContent] = useState<JSX.Element>(<g id="svgContent"></g>);
+  const [svgContent, setSvgContent] = useState<JSX.Element[]>([]);
   const [svgContentOrigin, setSvgContentOrigin] = useState({x : 0, y : 0});
   useEffect(() => {
     let svgContentHtml = document.getElementById("svgContent") as HTMLElement;
@@ -67,11 +67,24 @@ function App() {
       width : svgContentBoundingClientRect.width,
       height : svgContentBoundingClientRect.height
     });
-    document.querySelectorAll("text").forEach((textElement : SVGTextElement) => {
-      let boundingRect = textElement.getBoundingClientRect();
-      textElement.setAttribute("x", `${Number.parseFloat(textElement.getAttribute("x") ?? "0") - (boundingRect.width / 2)}`);
-      textElement.setAttribute("y", `${Number.parseFloat(textElement.getAttribute("y") ?? "0") + (boundingRect.height / 4)}`);
-    });
+
+    let texts = document.querySelectorAll("text");
+    let rectangles = document.querySelectorAll("rect");
+    for (let i = 0; i < texts.length; i++) {
+      let textI = texts[i] as SVGTextElement;
+      let rectangleI = rectangles[i] as SVGRectElement;
+      let boundingRectangle = textI.getBoundingClientRect();
+      let xAttribute = textI.getAttribute("x");
+      let yAttribute = textI.getAttribute("y");
+      let newX = (xAttribute == null ? 0 : Number.parseFloat(xAttribute)) - boundingRectangle.width / 2;
+      let newY = (yAttribute == null ? 0 : Number.parseFloat(yAttribute)) + boundingRectangle.height / 4;
+      textI.setAttribute("x", `${newX}`);
+      textI.setAttribute("y", `${newY}`);
+      rectangleI.setAttribute("x", `${newX}`);
+      rectangleI.setAttribute("y", `${-newY}`);
+      rectangleI.setAttribute("width", `${boundingRectangle.width}`);
+      rectangleI.setAttribute("height", `${boundingRectangle.height}`);
+    };
   }, [svgContent]);
   useEffect(() => {
     (document.getElementById("svgContent") as HTMLElement).style.display = "block";
@@ -135,68 +148,85 @@ function App() {
                   reader.addEventListener("load", event => {
                     // Read the content of the input file.
                     let parsedInput = (inputFileReaders[outputFileExtension] as FileReader)((event.target as globalThis.FileReader).result as string);
-                    let newSvgContent = <g id="svgContent">
+                    (document.getElementById("svgContent") as HTMLElement).style.display = "none";
+                    setSvgContent(parsedInput.rnaComplexes.map((rnaComplex : RNAComplex, rnaComplexIndex : number) => <g key={rnaComplexIndex}>
                     {
-                      parsedInput.rnaComplexes.map((rnaComplex : RNAComplex, index : number) => <g key={index} transform="scale(1 -1)">
-                      {
-                        rnaComplex.rnaMolecules.map((rnaMolecule : RNAMolecule, index : number) => <g key={index}>
-                          {
-                            Object.values(rnaMolecule.nucleotidesMap).map((nucleotide : Nucleotide, index : number) => {
-                              let elements = [
-                                <text id={[rnaComplex.name, rnaMolecule.name, index].join(":")} transform="scale(1 -1)" style={{
-                                  fill : nucleotide.color.toCSS(),
-                                  fontSize : nucleotide.font.size,
-                                  fontWeight : nucleotide.font.weight,
-                                  fontStyle : nucleotide.font.style,
-                                  fontFamily : nucleotide.font.family
-                                }} key="symbol">{nucleotide.symbol}</text>
-                              ];
-                              if (nucleotide.basePair !== null) {
-                                let basePairNucleotide = (rnaComplex.rnaMolecules[nucleotide.basePair.rnaMoleculeIndex] as RNAMolecule).nucleotidesMap[nucleotide.basePair.nucleotideIndex] as Nucleotide;
-                                let difference = Vector2D.subtract(basePairNucleotide.position, nucleotide.position);
-                                switch (nucleotide.basePair.type) {
-                                  case BasePairType.CANONICAL: {
-                                    let interpolatedNucleotidePosition = Vector2D.scaleUp(difference, 0.3);
-                                    let interpolatedBasePairNucleotidePosition = Vector2D.scaleUp(difference, 0.7)
-                                    elements.push(
-                                      <line x1={interpolatedNucleotidePosition.x} y1={interpolatedNucleotidePosition.y} x2={interpolatedBasePairNucleotidePosition.x} y2={interpolatedBasePairNucleotidePosition.y} stroke="black" key="bondSymbol" strokeWidth="0.2"/>
-                                    );
-                                    break;
-                                  }
-                                  case BasePairType.WOBBLE: {
-                                    let center = Vector2D.scaleUp(difference, 0.5);
-                                    elements.push(
-                                      <circle cx={center.x} cy={center.y} fill="black" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
-                                    );
-                                    break;
-                                  }
-                                  case BasePairType.MISMATCH: {
-                                    let center = Vector2D.scaleUp(difference, 0.5);
-                                    elements.push(
-                                      <circle cx={center.x} cy={center.y} fill="none" stroke="black" strokeWidth="0.2" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
-                                    );
-                                    break;
-                                  }
+                      rnaComplex.rnaMolecules.map((rnaMolecule : RNAMolecule, rnaMoleculeIndex : number) => <g key={rnaMoleculeIndex}>
+                        {
+                          Object.values(rnaMolecule.nucleotidesMap).map((nucleotide : Nucleotide, nucleotideIndex : number) => {
+                            let nucleotideRectangleElementId = [rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, "boundingClientRect"].join(":");
+                            let elements = [
+                              <text transform="scale(1 -1)" style={{
+                                fill : nucleotide.color.toCSS(),
+                                fontSize : nucleotide.font.size,
+                                fontWeight : nucleotide.font.weight,
+                                fontStyle : nucleotide.font.style,
+                                fontFamily : nucleotide.font.family
+                              }} key="symbol" onMouseEnter={() => {
+                                (document.getElementById(nucleotideRectangleElementId) as HTMLElement).style.stroke = "red";
+                              }} onMouseLeave={() => {
+                                (document.getElementById(nucleotideRectangleElementId) as HTMLElement).style.stroke = "none";
+                              }}>{nucleotide.symbol}</text>,
+                              <rect id={nucleotideRectangleElementId} key="symbolBoundingClientRect" style={{
+                                fill : "none",
+                                stroke : "none",
+                                strokeWidth : 0.2
+                              }}></rect>
+                            ];
+                            if (nucleotide.basePair !== null) {
+                              let basePairNucleotide = (rnaComplex.rnaMolecules[nucleotide.basePair.rnaMoleculeIndex] as RNAMolecule).nucleotidesMap[nucleotide.basePair.nucleotideIndex] as Nucleotide;
+                              let difference = Vector2D.subtract(basePairNucleotide.position, nucleotide.position);
+                              switch (nucleotide.basePair.type) {
+                                case BasePairType.CANONICAL: {
+                                  let interpolatedNucleotidePosition = Vector2D.scaleUp(difference, 0.3);
+                                  let interpolatedBasePairNucleotidePosition = Vector2D.scaleUp(difference, 0.7)
+                                  elements.push(
+                                    <line x1={interpolatedNucleotidePosition.x} y1={interpolatedNucleotidePosition.y} x2={interpolatedBasePairNucleotidePosition.x} y2={interpolatedBasePairNucleotidePosition.y} stroke="black" key="bondSymbol" strokeWidth="0.2"/>
+                                  );
+                                  break;
+                                }
+                                case BasePairType.WOBBLE: {
+                                  let center = Vector2D.scaleUp(difference, 0.5);
+                                  elements.push(
+                                    <circle cx={center.x} cy={center.y} fill="black" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
+                                  );
+                                  break;
+                                }
+                                case BasePairType.MISMATCH: {
+                                  let center = Vector2D.scaleUp(difference, 0.5);
+                                  elements.push(
+                                    <circle cx={center.x} cy={center.y} fill="none" stroke="black" strokeWidth="0.2" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
+                                  );
+                                  break;
                                 }
                               }
-                              if (nucleotide.labelLine !== null) {
-                                elements.push(<line x1={nucleotide.labelLine.endpoint0.x} y1={nucleotide.labelLine.endpoint0.y} x2={nucleotide.labelLine.endpoint1.x} y2={nucleotide.labelLine.endpoint1.y} strokeWidth={nucleotide.labelLine.strokeWidth} stroke={nucleotide.labelLine.color.toCSS()} key="labelLine"/>);
-                              }
-                              if (nucleotide.labelContent !== null) {
-                                elements.push(<text x={nucleotide.labelContent.position.x} y={-nucleotide.labelContent.position.y} transform="scale(1 -1)" fill={nucleotide.labelContent.color.toCSS()} fontSize={nucleotide.labelContent.font.size} fontFamily={nucleotide.labelContent.font.family} fontStyle={nucleotide.labelContent.font.style} fontWeight={nucleotide.labelContent.font.weight  } key="labelContent">{nucleotide.labelContent.content}</text>);
-                              }
-                              return <g key={index} transform={`translate(${nucleotide.position.x} ${nucleotide.position.y})`}>
-                                {elements}
-                              </g>
-                            })
-                          }
-                        </g>)
-                      }
+                            }
+                            if (nucleotide.labelLine !== null) {
+                              elements.push(<line x1={nucleotide.labelLine.endpoint0.x} y1={nucleotide.labelLine.endpoint0.y} x2={nucleotide.labelLine.endpoint1.x} y2={nucleotide.labelLine.endpoint1.y} strokeWidth={nucleotide.labelLine.strokeWidth} stroke={nucleotide.labelLine.color.toCSS()} key="labelLine"/>);
+                            }
+                            if (nucleotide.labelContent !== null) {
+                              let labelRectangleElementId = [rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, "label", "boundingClientRect"].join(":");
+                              elements.push(
+                                <text x={nucleotide.labelContent.position.x} y={-nucleotide.labelContent.position.y} transform="scale(1 -1)" fill={nucleotide.labelContent.color.toCSS()} fontSize={nucleotide.labelContent.font.size} fontFamily={nucleotide.labelContent.font.family} fontStyle={nucleotide.labelContent.font.style} fontWeight={nucleotide.labelContent.font.weight} onMouseEnter={() => {
+                                  (document.getElementById(labelRectangleElementId) as HTMLElement).style.stroke = "red";
+                                }} onMouseLeave={() => {
+                                  (document.getElementById(labelRectangleElementId) as HTMLElement).style.stroke = "none";
+                                }} key="labelContent">{nucleotide.labelContent.content}</text>,
+                                <rect id={labelRectangleElementId} key="labelContentBoundingClientRect" style={{
+                                  fill : "none",
+                                  stroke : "none",
+                                  strokeWidth : 0.2
+                                }}></rect>
+                              );
+                            }
+                            return <g key={nucleotideIndex} transform={`translate(${nucleotide.position.x} ${nucleotide.position.y})`}>
+                              {elements}
+                            </g>
+                          })
+                        }
                       </g>)
                     }
-                  </g>;
-                    (document.getElementById("svgContent") as HTMLElement).style.display = "none";
-                    setSvgContent(newSvgContent);
+                    </g>));
                   });
                   reader.readAsText(files[0] as File);
                 }
@@ -312,7 +342,8 @@ function App() {
         display : "block",
         width : "100%",
         height : svgHeight,
-        position : "absolute"
+        position : "absolute",
+        background : invertColorsInViewFlag ? "black" : "white"
       }} onMouseDown={mouseEvent => {
         setDragStart(new Vector2D(mouseEvent.clientX, mouseEvent.clientY));
       }} onMouseMove={event => {
@@ -321,8 +352,7 @@ function App() {
         }
       }} onMouseLeave={handleMouseUp}
       onMouseUp={handleMouseUp}>
-        <rect width="100%" height="100%" fill={invertColorsInViewFlag ? "black" : "white"}/>
-        <g transform={`translate(${svgTranslate.x + svgTranslateFromDrag.x} ${svgTranslate.y + svgTranslateFromDrag.y}) scale(${zoom * Math.min((parentDivDimensionsWatcher.width ?? 1) / svgContentDimensions.width, svgHeight / svgContentDimensions.height)}) translate(${svgContentOrigin.x} ${svgContentOrigin.y})`}>
+        <g id="svgContent" transform={`translate(${svgTranslate.x + svgTranslateFromDrag.x} ${svgTranslate.y + svgTranslateFromDrag.y}) scale(${zoom * Math.min((parentDivDimensionsWatcher.width ?? 1) / svgContentDimensions.width, svgHeight / svgContentDimensions.height)}) translate(${svgContentOrigin.x} ${svgContentOrigin.y}) scale(1 -1)`}>
           {svgContent}
         </g>
       </svg>
