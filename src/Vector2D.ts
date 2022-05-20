@@ -21,11 +21,23 @@ class Vector2D {
     );
   }
 
+  public static negate(v : Vector2D) : Vector2D {
+    return Vector2D.scaleUp(v, -1);
+  }
+
   public static scaleUp(v : Vector2D, scalar : number) : Vector2D {
     return new Vector2D(
       v.x * scalar,
       v.y * scalar
     );
+  }
+
+  public static normalize(v : Vector2D) {
+    return Vector2D.scaleDown(v, Vector2D.magnitude(v));
+  }
+
+  public static orthogonalize(v : Vector2D) {
+    return new Vector2D(-v.y, v.x);
   }
 
   public static scaleDown(v : Vector2D, scalar : number) : Vector2D {

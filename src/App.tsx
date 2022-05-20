@@ -19,8 +19,8 @@ enum Tab {
 function App() {
   const tabColors : Record<Tab, string> = {
     [Tab.IMPORT_EXPORT] : "rgb(24, 98, 24)",
-    [Tab.EDIT] : "rgb(204, 85, 0)",
-    [Tab.FORMAT] : "rgb(124, 0, 0)",
+    [Tab.EDIT] : "rgb(124, 0, 0)",
+    [Tab.FORMAT] : "rgb(204, 85, 0)",
     [Tab.ANNOTATE] : "rgb(34, 34, 139)",
     [Tab.SETTINGS] : "purple"
   };
@@ -44,7 +44,7 @@ function App() {
   const [zoomExponent, setZoomExponent] = useState<number>(0);
   const [zoom, setZoom] = useState<number>(1);
   const [roundedZoom, setRoundedZoom] = useState(`${Math.round(zoom)}`);
-  const zoomBase = 1.1;
+  const ZOOM_BASE = 1.1;
   const [showToolsFlag, setShowToolsFlag] = useState<boolean>(true);
   const parentDivDimensionsWatcher = useResizeDetector();
   const bannerDivDimensionsWatcher = useResizeDetector();
@@ -102,6 +102,10 @@ function App() {
     setSvgTranslateFromDrag(new Vector2D(0, 0));
     setDragStart(null);
   }
+  const ELEMENT_ID_DELIMITER = ":";
+  const MOUSE_OVER_HIGHLIGHT_STROKE = tabColors[Tab.EDIT];
+  const DEFAULT_STROKE_WIDTH = 0.2;
+  const DEFAULT_NUMBER_OF_DECIMAL_POINTS = 2;
   return (
     <div style={{
       border : showTabReminderFlag ? `solid ${tabColors[currentTab]} 6px` : "none" ,
@@ -123,7 +127,10 @@ function App() {
               border : "groove gray",
               color : currentTab === tabName ? "white" : "black",
               backgroundColor : currentTab === tabName ? buttonDatum : "white"
-            }} key={tabName} onClick={() => setCurrentTab(tabName as Tab)}>{tabName}</button>;
+            }} key={tabName} onClick={() => {
+              console.log(`New currentTab: ${tabName} ${tabName as Tab}`);
+              setCurrentTab(tabName as Tab);
+            }}>{tabName}</button>;
           })}
           <div style={{
             display : currentTab === Tab.IMPORT_EXPORT ? "block" : "none"
@@ -154,7 +161,8 @@ function App() {
                       rnaComplex.rnaMolecules.map((rnaMolecule : RNAMolecule, rnaMoleculeIndex : number) => <g key={rnaMoleculeIndex}>
                         {
                           Object.values(rnaMolecule.nucleotidesMap).map((nucleotide : Nucleotide, nucleotideIndex : number) => {
-                            let nucleotideRectangleElementId = [rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, "boundingClientRect"].join(":");
+                            let nucleotideElementId = [rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex].join(ELEMENT_ID_DELIMITER);
+                            let nucleotideRectangleElementId = [nucleotideElementId, "boundingClientRect"].join(ELEMENT_ID_DELIMITER);
                             let elements = [
                               <text transform="scale(1 -1)" style={{
                                 fill : nucleotide.color.toCSS(),
@@ -163,14 +171,17 @@ function App() {
                                 fontStyle : nucleotide.font.style,
                                 fontFamily : nucleotide.font.family
                               }} key="symbol" onMouseEnter={() => {
-                                (document.getElementById(nucleotideRectangleElementId) as HTMLElement).style.stroke = "red";
+                                if (currentTab === Tab.EDIT) {
+                                  (document.getElementById(nucleotideRectangleElementId) as HTMLElement).style.stroke = 
+                                  MOUSE_OVER_HIGHLIGHT_STROKE;
+                                }
                               }} onMouseLeave={() => {
                                 (document.getElementById(nucleotideRectangleElementId) as HTMLElement).style.stroke = "none";
                               }}>{nucleotide.symbol}</text>,
                               <rect id={nucleotideRectangleElementId} key="symbolBoundingClientRect" style={{
                                 fill : "none",
                                 stroke : "none",
-                                strokeWidth : 0.2
+                                strokeWidth : DEFAULT_STROKE_WIDTH
                               }}></rect>
                             ];
                             if (nucleotide.basePair !== null) {
@@ -181,7 +192,7 @@ function App() {
                                   let interpolatedNucleotidePosition = Vector2D.scaleUp(difference, 0.3);
                                   let interpolatedBasePairNucleotidePosition = Vector2D.scaleUp(difference, 0.7)
                                   elements.push(
-                                    <line x1={interpolatedNucleotidePosition.x} y1={interpolatedNucleotidePosition.y} x2={interpolatedBasePairNucleotidePosition.x} y2={interpolatedBasePairNucleotidePosition.y} stroke="black" key="bondSymbol" strokeWidth="0.2"/>
+                                    <line x1={interpolatedNucleotidePosition.x} y1={interpolatedNucleotidePosition.y} x2={interpolatedBasePairNucleotidePosition.x} y2={interpolatedBasePairNucleotidePosition.y} stroke="black" key="bondSymbol" strokeWidth={DEFAULT_STROKE_WIDTH}/>
                                   );
                                   break;
                                 }
@@ -195,7 +206,7 @@ function App() {
                                 case BasePairType.MISMATCH: {
                                   let center = Vector2D.scaleUp(difference, 0.5);
                                   elements.push(
-                                    <circle cx={center.x} cy={center.y} fill="none" stroke="black" strokeWidth="0.2" r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
+                                    <circle cx={center.x} cy={center.y} fill="none" stroke="black" strokeWidth={DEFAULT_STROKE_WIDTH} r={Vector2D.magnitude(difference) / 10} key="bondSymbol"></circle>
                                   );
                                   break;
                                 }
@@ -203,19 +214,77 @@ function App() {
                             }
                             if (nucleotide.labelLine !== null) {
                               elements.push(<line x1={nucleotide.labelLine.endpoint0.x} y1={nucleotide.labelLine.endpoint0.y} x2={nucleotide.labelLine.endpoint1.x} y2={nucleotide.labelLine.endpoint1.y} strokeWidth={nucleotide.labelLine.strokeWidth} stroke={nucleotide.labelLine.color.toCSS()} key="labelLine"/>);
+                              let labelLineElementId = [nucleotideElementId, "labelLine"].join(ELEMENT_ID_DELIMITER);
+                              let pathBodyElementId = [labelLineElementId, "boundingBodyPath"].join(ELEMENT_ID_DELIMITER);
+                              let pathCap0ElementId = [labelLineElementId, "boundingCap0Path"].join(ELEMENT_ID_DELIMITER);
+                              let pathCap1ElementId = [labelLineElementId, "boundingCap1Path"].join(ELEMENT_ID_DELIMITER);
+                              let differenceBetweenEndpoints = Vector2D.subtract(nucleotide.labelLine.endpoint1, nucleotide.labelLine.endpoint0);
+                              let v0 = Vector2D.add(nucleotide.labelLine.endpoint0, Vector2D.scaleUp(differenceBetweenEndpoints, 0.2));
+                              let v1 = Vector2D.subtract(nucleotide.labelLine.endpoint1, Vector2D.scaleUp(differenceBetweenEndpoints, 0.2));
+                              // "positive" / "negative" designations are arbitrary.
+                              let positiveTranslation = Vector2D.scaleDown(Vector2D.orthogonalize(differenceBetweenEndpoints), 3);
+                              let negativeTranslation = Vector2D.negate(positiveTranslation);
+                              let v0TranslatedPositively = Vector2D.add(v0, positiveTranslation);
+                              let v0TranslatedNegatively = Vector2D.add(v0, negativeTranslation);
+                              let v1TranslatedPositively = Vector2D.add(v1, positiveTranslation);
+                              let v1TranslatedNegatively = Vector2D.add(v1, negativeTranslation);
+                              elements.push(
+                                <path id={pathBodyElementId} pointerEvents = "all" d={`M${v0TranslatedPositively.x} ${v0TranslatedPositively.y} L${v1TranslatedPositively.x} ${v1TranslatedPositively.y} L${v1TranslatedNegatively.x} ${v1TranslatedNegatively.y} L${v0TranslatedNegatively.x} ${v0TranslatedNegatively.y}Z`} style={{
+                                  stroke : "none",
+                                  fill : "none",
+                                  strokeWidth : DEFAULT_STROKE_WIDTH
+                                }} onMouseEnter={() => {
+                                  console.log(`currentTab: ${currentTab} === ${Tab.EDIT} ? ${currentTab === Tab.EDIT}`);
+                                  if (currentTab === Tab.EDIT) {
+                                    [pathBodyElementId, pathCap0ElementId, pathCap1ElementId].forEach((elementId : string) => {
+                                      (document.getElementById(elementId) as HTMLElement).style.stroke = MOUSE_OVER_HIGHLIGHT_STROKE;
+                                    });
+                                  }
+                                }} onMouseLeave={() => {
+                                  [pathBodyElementId, pathCap0ElementId, pathCap1ElementId].forEach((elementId : string) => {
+                                    (document.getElementById(elementId) as HTMLElement).style.stroke = "none";
+                                  });
+                                }} key="boundingBodyPath"/>,
+                                <path id={pathCap0ElementId} pointerEvents = "all" d={`M${v0TranslatedPositively.x} ${v0TranslatedPositively.y} A1 1 0 0 1 ${v0TranslatedNegatively.x} ${v0TranslatedNegatively.y} Z`} style={{
+                                  stroke : "none",
+                                  fill : "none",
+                                  strokeWidth : DEFAULT_STROKE_WIDTH
+                                }} onMouseEnter={() => {
+                                  if (currentTab === Tab.EDIT) {
+                                    (document.getElementById(pathCap0ElementId) as HTMLElement).style.stroke = MOUSE_OVER_HIGHLIGHT_STROKE;
+                                  }
+                                }} onMouseLeave={() => {
+                                  (document.getElementById(pathCap0ElementId) as HTMLElement).style.stroke = "none";
+                                }} key="boundingCap0Path"/>,
+                                <path id={pathCap1ElementId} pointerEvents = "all" d={`M${v1TranslatedNegatively.x} ${v1TranslatedNegatively.y} A1 1 0 0 1 ${v1TranslatedPositively.x} ${v1TranslatedPositively.y} Z`} style={{
+                                  stroke : "none",
+                                  fill : "none",
+                                  strokeWidth : DEFAULT_STROKE_WIDTH
+                                }} onMouseEnter={() => {
+                                  if (currentTab === Tab.EDIT) {
+                                    (document.getElementById(pathCap1ElementId) as HTMLElement).style.stroke = MOUSE_OVER_HIGHLIGHT_STROKE;
+                                  }
+                                }} onMouseLeave={() => {
+                                  (document.getElementById(pathCap1ElementId) as HTMLElement).style.stroke = "none";
+                                }} key="boundingCap1Path"/>
+                              );
                             }
                             if (nucleotide.labelContent !== null) {
-                              let labelRectangleElementId = [rnaComplexIndex, rnaMoleculeIndex, nucleotideIndex, "label", "boundingClientRect"].join(":");
+                              let labelContentElementId = [nucleotideElementId, "labelContent"].join(ELEMENT_ID_DELIMITER);
+                              let labelRectangleElementId = [labelContentElementId, "boundingClientRect"].join(ELEMENT_ID_DELIMITER);
                               elements.push(
                                 <text x={nucleotide.labelContent.position.x} y={-nucleotide.labelContent.position.y} transform="scale(1 -1)" fill={nucleotide.labelContent.color.toCSS()} fontSize={nucleotide.labelContent.font.size} fontFamily={nucleotide.labelContent.font.family} fontStyle={nucleotide.labelContent.font.style} fontWeight={nucleotide.labelContent.font.weight} onMouseEnter={() => {
-                                  (document.getElementById(labelRectangleElementId) as HTMLElement).style.stroke = "red";
+                                  if (currentTab === Tab.EDIT) {
+                                    (document.getElementById(labelRectangleElementId) as HTMLElement).style.stroke = MOUSE_OVER_HIGHLIGHT_STROKE;
+                                  }
                                 }} onMouseLeave={() => {
                                   (document.getElementById(labelRectangleElementId) as HTMLElement).style.stroke = "none";
                                 }} key="labelContent">{nucleotide.labelContent.content}</text>,
                                 <rect id={labelRectangleElementId} key="labelContentBoundingClientRect" style={{
                                   fill : "none",
                                   stroke : "none",
-                                  strokeWidth : 0.2
+                                  strokeWidth : DEFAULT_STROKE_WIDTH,
+                                  display : "block"
                                 }}></rect>
                               );
                             }
@@ -307,15 +376,15 @@ function App() {
             <input type="range" value={zoomExponent} min={-50} max={50} onChange={event => {
               let newZoomExponent = Number.parseInt((event.target as HTMLInputElement).value);
               setZoomExponent(newZoomExponent);
-              let newZoom = Math.pow(zoomBase, newZoomExponent);
+              let newZoom = Math.pow(ZOOM_BASE, newZoomExponent);
               setZoom(newZoom);
-              setRoundedZoom(newZoom.toFixed(2));
+              setRoundedZoom(newZoom.toFixed(DEFAULT_NUMBER_OF_DECIMAL_POINTS));
             }}/>
             <input type="number" value={roundedZoom} onChange={event => {
               let newZoom = Number.parseFloat(event.target.value);
               if (!Number.isNaN(newZoom)) {
                 setZoom(newZoom);
-                setZoomExponent(Math.log(newZoom) / Math.log(zoomBase));
+                setZoomExponent(Math.log(newZoom) / Math.log(ZOOM_BASE));
               }
               setRoundedZoom(event.target.value);
             }} step={0.01}/>
@@ -335,7 +404,7 @@ function App() {
           display : "block",
           marginLeft : "auto",
           marginRight : "auto"
-        }} onClick={() => setShowToolsFlag(!showToolsFlag)}>{showToolsFlag ? "↑" : "↓"}</button>
+        }} onClick={() => setShowToolsFlag(!showToolsFlag)}>{(showToolsFlag ? "↑" : "↓") + currentTab + " " + (currentTab === Tab.EDIT)}</button>
         
       </div>
       <svg id="svg" viewBox={`0 0 ${parentDivDimensionsWatcher.width ?? 0} ${svgHeight}`} version="1.1" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" style={{
@@ -350,8 +419,13 @@ function App() {
         if (dragStart !== null) {
           setSvgTranslateFromDrag(new Vector2D(event.clientX - dragStart.x, event.clientY - dragStart.y));
         }
-      }} onMouseLeave={handleMouseUp}
-      onMouseUp={handleMouseUp}>
+      }} onMouseLeave={handleMouseUp} onMouseUp={handleMouseUp} onWheel={(event) => {
+        let newZoomExponent = zoomExponent + (event.deltaY < 0 ? 1 : -1);
+        setZoomExponent(newZoomExponent);
+        let zoom = Math.pow(ZOOM_BASE, newZoomExponent);
+        setZoom(zoom);
+        setRoundedZoom(zoom.toFixed(DEFAULT_NUMBER_OF_DECIMAL_POINTS));
+      }}>
         <g id="svgContent" transform={`translate(${svgTranslate.x + svgTranslateFromDrag.x} ${svgTranslate.y + svgTranslateFromDrag.y}) scale(${zoom * Math.min((parentDivDimensionsWatcher.width ?? 1) / svgContentDimensions.width, svgHeight / svgContentDimensions.height)}) translate(${svgContentOrigin.x} ${svgContentOrigin.y}) scale(1 -1)`}>
           {svgContent}
         </g>
