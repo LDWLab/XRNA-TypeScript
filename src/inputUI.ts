@@ -371,7 +371,8 @@ const xrnaFileReader : FileReader = inputFileContent => {
                     position : new Vector2D(x, y),
                     content : contentMatch[1] as string,
                     color,
-                    font : Font.fromFontId(fontId, fontSize)
+                    font : Font.fromFontId(fontId, fontSize),
+                    graphicalAdjustment : new Vector2D(0, 0)
                   };
                   break;
                 }
@@ -440,6 +441,18 @@ const xrnaFileReader : FileReader = inputFileContent => {
   Array.from(new DOMParser().parseFromString(inputFileContent, "text/xml").children).forEach(childElement => {
     parseDomElement(childElement, output, { tagName : "" });
   });
+  output.rnaComplexes.forEach((rnaComplex : RNAComplex) => rnaComplex.rnaMolecules.forEach((rnaMolecule : RNAMolecule) => {
+    let countBonds = 0;
+    let totalBondLengthSum = 0;
+    Object.values(rnaMolecule.nucleotidesMap).forEach((nucleotide : Nucleotide) => {
+      if (nucleotide.basePair !== null) {
+        let basePairNucleotide = (rnaComplex.rnaMolecules[nucleotide.basePair.rnaMoleculeIndex] as RNAMolecule).nucleotidesMap[nucleotide.basePair.nucleotideIndex] as Nucleotide;
+        countBonds++;
+        totalBondLengthSum += Vector2D.distance(nucleotide.position, basePairNucleotide.position);
+      }
+    });
+    rnaMolecule.basePairCircleRadius = totalBondLengthSum / (countBonds * 6);
+  }))
   return output;
 };
 

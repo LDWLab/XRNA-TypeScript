@@ -59,6 +59,14 @@ class Vector2D {
   public static magnitude(v : Vector2D) : number {
     return Math.sqrt(Vector2D.magnitudeSquared(v));
   }
+
+  public static distanceSquared(v0 : Vector2D, v1 : Vector2D) : number {
+    return Vector2D.magnitudeSquared(Vector2D.subtract(v0, v1));
+  }
+
+  public static distance(v0 : Vector2D, v1 : Vector2D) : number {
+    return Vector2D.magnitude(Vector2D.subtract(v0, v1));
+  }
 }
 
 export { Vector2D };

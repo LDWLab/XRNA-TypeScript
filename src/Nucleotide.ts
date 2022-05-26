@@ -27,12 +27,14 @@ type LabelContent = {
   position : Vector2D,
   content : string,
   font : Font,
-  color : Color
+  color : Color,
+  graphicalAdjustment : Vector2D
 };
 
 class Nucleotide {
   public symbol : NucleotideSymbol;
   public position : Vector2D;
+  public graphicalAdjustment : Vector2D;
   public basePair : BasePair | null;
   public labelLine : LabelLine | null;
   public labelContent : LabelContent | null;
@@ -42,6 +44,7 @@ class Nucleotide {
   public constructor(symbol : NucleotideSymbol, position : Vector2D, basePair : BasePair | null = null, labelLine : LabelLine | null = null, labelContent : LabelContent | null = null, color : Color | null = null, font : Font | null = null) {
     this.symbol = symbol;
     this.position = position;
+    this.graphicalAdjustment = new Vector2D(0, 0);
     this.basePair = basePair;
     this.labelLine = labelLine;
     this.labelContent = labelContent;
