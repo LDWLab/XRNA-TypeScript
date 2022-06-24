@@ -28,6 +28,33 @@
   color: #61dafb;
 }
 
+button {
+  color : inherit;
+  border : outset black;
+  background-color: inherit;
+  border-radius: 5px;
+}
+
+input {
+  color : inherit;
+  border : outset black;
+  background-color: inherit;
+  border-radius: 5px;
+}
+
+select {
+  color : inherit;
+  border : outset black;
+  background-color: inherit;
+  border-radius: 5px;
+}
+
+option {
+  color : inherit;
+  border : outset black;
+  border-radius: 5px;
+}
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);
