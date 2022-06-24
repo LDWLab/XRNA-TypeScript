@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/XRNA-TypeScript/static/css/main.b288ceb4.css",
+    "main.js": "/XRNA-TypeScript/static/js/main.f48f3c61.js",
+    "static/js/787.9bfdb19d.chunk.js": "/XRNA-TypeScript/static/js/787.9bfdb19d.chunk.js",
+    "index.html": "/XRNA-TypeScript/index.html",
+    "main.b288ceb4.css.map": "/XRNA-TypeScript/static/css/main.b288ceb4.css.map",
+    "main.f48f3c61.js.map": "/XRNA-TypeScript/static/js/main.f48f3c61.js.map",
+    "787.9bfdb19d.chunk.js.map": "/XRNA-TypeScript/static/js/787.9bfdb19d.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.b288ceb4.css",
+    "static/js/main.f48f3c61.js"
+  ]
+}
