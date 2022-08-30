@@ -1,0 +1,33 @@
+button {
+  background-color: inherit;
+  color : inherit;
+}
+
+input {
+  background-color: inherit;
+  color : inherit;
+}
+
+select {
+  background-color: inherit;
+  color : inherit;
+}
+
+option {
+  background-color: inherit;
+  color : inherit;
+}
+
+body {
+  overflow : hidden
+}
+
+div {
+  background-color : inherit;
+}
+
+text {
+  -webkit-user-select : none;
+  -ms-user-select: none;
+  user-select: none;
+}
