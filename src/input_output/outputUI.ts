@@ -200,12 +200,12 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
 };
 
 const outputFileWriters : Record<string, XrnaFileWriter> = {
-  "xrna" : () => "This is an XRNA file.",
-  "svg" : () => "This is an SVG file.",
-  "tr" : () => "This is a TR file.",
-  "csv" : () => "This is a CSV file.",
-  "bpseq" : () => "This is a BPSeq file.",
-  "jpg" : () => "This is a JPG file.",
+  // "xrna" : () => "This is an XRNA file.",
+  // "svg" : () => "This is an SVG file.",
+  // "tr" : () => "This is a TR file.",
+  // "csv" : () => "This is a CSV file.",
+  // "bpseq" : () => "This is a BPSeq file.",
+  // "jpg" : () => "This is a JPG file.",
   "json" : jsonFileWriter
 };
 

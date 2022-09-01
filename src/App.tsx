@@ -17,6 +17,9 @@ export const CHARCOAL_GRAY_CSS = "rgb(54, 64, 79)";
 const ZOOM_BASE = 1.1;
 const ZOOM_STEP = Math.pow(10, -FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT);
 export const ONE_OVER_LOG_OF_ZOOM_BASE = 1 / Math.log(ZOOM_BASE);
+const DEFAULT_RIGHT_CLICK_MENU_CONTENT = <>
+  Right-click nucleotide to show selection-constraint details.
+</>
 
 export namespace App {
   // Begin types.
@@ -150,7 +153,7 @@ export namespace App {
           height : 0
         },
         visualizationElements : [],
-        rightClickMenuContent : <></>,
+        rightClickMenuContent : DEFAULT_RIGHT_CLICK_MENU_CONTENT,
         rightClickMenuReference : null
       };
       Component.current = this;
@@ -406,7 +409,9 @@ export namespace App {
                   backgroundColor : this.state.currentTab === tab.tab ? tab.tabData.color : "inherit"
                 }}
                 onClick = {() => this.setState({
-                  currentTab : tab.tab
+                  currentTab : tab.tab,
+                  rightClickMenuContent : DEFAULT_RIGHT_CLICK_MENU_CONTENT,
+                  rightClickMenuReference : null
                 })}
               >
                 {tab.tab}
@@ -518,7 +523,9 @@ export namespace App {
                 Selection constraint:&nbsp;
                 <select
                   onChange = {(event) => this.setState({
-                    selectionConstraint : event.target.value
+                    selectionConstraint : event.target.value,
+                    rightClickMenuContent : DEFAULT_RIGHT_CLICK_MENU_CONTENT,
+                    rightClickMenuReference : null
                   })}
                 >
                   {Object.entries(SelectionConstraint.selectionConstraints).map((selectionConstraintData : [string, SelectionConstraint.SelectionConstraint], selectionConstraintIndex : number) => <option
@@ -542,7 +549,7 @@ export namespace App {
                 borderLeft : this.state.rightClickMenuContent === null ? "none" : "solid white 1px"
               }}
             >
-              {this.state.rightClickMenuContent}
+              {this.state.currentTab === Tab.IMPORT_EXPORT ? <></> : this.state.rightClickMenuContent}
             </div>
           </div>
           <button
