@@ -718,18 +718,18 @@ const inputFileReaders : Record<string, XrnaFileReader> = {
   "xml" : xrnaFileReader,
   "ps" : xrnaFileReader,
   "ss" : xrnaFileReader,
-  "str" : (_ : string) => {
-    return {
-      rnaComplexes : [],
-      complexDocumentName : ""
-    };
-  },
-  "svg" : (_ : string) => {
-    return {
-      rnaComplexes : [],
-      complexDocumentName : ""
-    };
-  },
+  // "str" : (_ : string) => {
+  //   return {
+  //     rnaComplexes : [],
+  //     complexDocumentName : ""
+  //   };
+  // },
+  // "svg" : (_ : string) => {
+  //   return {
+  //     rnaComplexes : [],
+  //     complexDocumentName : ""
+  //   };
+  // },
   "json" : jsonFileReader
 };
 
