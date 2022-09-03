@@ -139,6 +139,7 @@ export namespace Nucleotide {
               y2 = {v1.y}
               stroke = {this.state.basePair.stroke.toCSS()}
               strokeWidth = {this.state.basePair.strokeWidth}
+              pointerEvents = "none"
             />
           });
           break;
@@ -154,6 +155,7 @@ export namespace Nucleotide {
               fill = "none"
               stroke = {this.state.basePair.stroke.toCSS()}
               strokeWidth = {this.state.basePair.strokeWidth}
+              pointerEvents = "none"
             />
           });
           break;
@@ -169,6 +171,7 @@ export namespace Nucleotide {
               fill = {this.state.basePair.stroke.toCSS()}
               stroke = "none"
               strokeWidth = {this.state.basePair.strokeWidth}
+              pointerEvents = "none"
             />
           })
           break;
