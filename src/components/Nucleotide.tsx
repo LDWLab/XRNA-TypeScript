@@ -198,6 +198,7 @@ export namespace Nucleotide {
     }
 
     public override render() {
+      let app = App.Component.getCurrent();
       const optionalChildren : Array<JSX.Element> = new Array<JSX.Element>();
       const labelContent = this.state.labelContent;
       const labelLine = this.state.labelLine;
@@ -219,38 +220,42 @@ export namespace Nucleotide {
           fill = "none"
           stroke = "red"
           strokeWidth = {DEFAULT_STROKE_WIDTH}
-          visibility = {this.state.displayLabelContentMouseoverFlag && App.Component.getCurrent().state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelContentMouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
           transform = {`translate(${labelContent.position.x + labelContent.graphicalAdjustment.x} ${labelContent.position.y + labelContent.graphicalAdjustment.y})`}
           width = {this.state.labelContentBoundingBoxWidth}
           height = {this.state.labelContentBoundingBoxHeight}
           pointerEvents = "all"
           onMouseDown = {() => {
             const nucleotide : Component = this;
-            App.Component.getCurrent().setState({
-              activeDragListener : {
-                isWindowDragListenerFlag : false,
-                getCachedDrag() {
-                  return labelContent.position;
-                },
-                drag (totalDrag : Vector2D) {
-                  labelContent.position = totalDrag;
-                  nucleotide.setState({
-                    // No other changes.
-                  });
-                },
-                affectedNucleotides : [nucleotide]
-              }
+            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              isWindowDragListenerFlag : false,
+              initiateDrag() {
+                return labelContent.position;
+              },
+              drag (totalDrag : Vector2D) {
+                labelContent.position = totalDrag;
+                nucleotide.setState({
+                  // No other changes.
+                });
+              },
+              terminateDrag() {
+                // Do nothing.
+              },
+              affectedNucleotides : [nucleotide]
+            };
+            app.setState({
+              activeDragListener
             })
           }}
           onMouseEnter = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelContentMouseoverFlag : true,
               });
             }
           }}
           onMouseLeave = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelContentMouseoverFlag : false
               })
@@ -277,16 +282,16 @@ export namespace Nucleotide {
           cx = {labelLine.endpoint0.x}
           cy = {labelLine.endpoint0.y}
           r = {MOUSE_OVER_RADIUS}
-          visibility = {this.state.displayLabelLineEndpoint0MouseoverFlag && App.Component.getCurrent().state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelLineEndpoint0MouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
           onMouseEnter = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint0MouseoverFlag : true
               });
             }
           }}
           onMouseLeave = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint0MouseoverFlag : false
               })
@@ -294,20 +299,24 @@ export namespace Nucleotide {
           }}
           onMouseDown = {() => {
             let nucleotide : Component = this;
-            App.Component.getCurrent().setState({
-              activeDragListener : {
-                isWindowDragListenerFlag : false,
-                getCachedDrag() {
-                  return labelLine.endpoint0;
-                },
-                drag(totalDrag : Vector2D) {
-                  labelLine.endpoint0 = totalDrag;
-                  nucleotide.setState({
-                    // No other changes.
-                  });
-                },
-                affectedNucleotides : [nucleotide]
-              }
+            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              isWindowDragListenerFlag : false,
+              initiateDrag() {
+                return labelLine.endpoint0;
+              },
+              drag(totalDrag : Vector2D) {
+                labelLine.endpoint0 = totalDrag;
+                nucleotide.setState({
+                  // No other changes.
+                });
+              },
+              terminateDrag() {
+                // Do nothing.
+              },
+              affectedNucleotides : [nucleotide]
+            };
+            app.setState({
+              activeDragListener
             });
           }}
         />,
@@ -320,16 +329,16 @@ export namespace Nucleotide {
           cx = {labelLine.endpoint1.x}
           cy = {labelLine.endpoint1.y}
           r = {MOUSE_OVER_RADIUS}
-          visibility = {this.state.displayLabelLineEndpoint1MouseoverFlag && App.Component.getCurrent().state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelLineEndpoint1MouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
           onMouseEnter = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint1MouseoverFlag : true
               });
             }
           }}
           onMouseLeave = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint1MouseoverFlag : false
               });
@@ -337,20 +346,24 @@ export namespace Nucleotide {
           }}
           onMouseDown = {() => {
             let nucleotide : Component = this;
-            App.Component.getCurrent().setState({
-              activeDragListener : {
-                isWindowDragListenerFlag : false,
-                getCachedDrag() {
-                  return labelLine.endpoint1;
-                },
-                drag(totalDrag : Vector2D) {
-                  labelLine.endpoint1 = totalDrag;
-                  nucleotide.setState({
-                    // No other changes.
-                  });
-                },
-                affectedNucleotides : [nucleotide]
-              }
+            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              isWindowDragListenerFlag : false,
+              initiateDrag() {
+                return labelLine.endpoint1;
+              },
+              drag(totalDrag : Vector2D) {
+                labelLine.endpoint1 = totalDrag;
+                nucleotide.setState({
+                  // No other changes.
+                });
+              },
+              terminateDrag() {
+                // Do nothing.
+              },
+              affectedNucleotides : [nucleotide]
+            };
+            app.setState({
+              activeDragListener
             });
           }}
         />);
@@ -368,16 +381,16 @@ export namespace Nucleotide {
           strokeWidth = {DEFAULT_STROKE_WIDTH}
           fill = "none"
           d = {`M ${endpoint0TranslatedPositively.x} ${endpoint0TranslatedPositively.y} A ${MOUSE_OVER_RADIUS} ${MOUSE_OVER_RADIUS} 0 0 0 ${endpoint0TranslatedNegatively.x} ${endpoint0TranslatedNegatively.y} L ${endpoint1TranslatedNegatively.x} ${endpoint1TranslatedNegatively.y} A ${MOUSE_OVER_RADIUS} ${MOUSE_OVER_RADIUS} 0 0 0 ${endpoint1TranslatedPositively.x} ${endpoint1TranslatedPositively.y} z`}
-          visibility = {this.state.displayLabelLineCenterMouseoverFlag && App.Component.getCurrent().state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelLineCenterMouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
           onMouseEnter = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelLineCenterMouseoverFlag : true
               });
             }
           }}
           onMouseLeave = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displayLabelLineCenterMouseoverFlag : false
               });
@@ -385,22 +398,26 @@ export namespace Nucleotide {
           }}
           onMouseDown = {() => {
             let nucleotide : Component = this;
-            App.Component.getCurrent().setState({
-              activeDragListener : {
-                isWindowDragListenerFlag : false,
-                getCachedDrag() {
-                  endpointPositionDifference = Vector2D.subtract(labelLine.endpoint1, labelLine.endpoint0);
-                  return labelLine.endpoint0;
-                },
-                drag(totalDrag : Vector2D) {
-                  labelLine.endpoint0 = totalDrag;
-                  labelLine.endpoint1 = Vector2D.add(totalDrag, endpointPositionDifference);
-                  nucleotide.setState({
-                    // No other changes.
-                  });
-                },
-                affectedNucleotides : []
-              }
+            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              isWindowDragListenerFlag : false,
+              initiateDrag() {
+                endpointPositionDifference = Vector2D.subtract(labelLine.endpoint1, labelLine.endpoint0);
+                return labelLine.endpoint0;
+              },
+              drag(totalDrag : Vector2D) {
+                labelLine.endpoint0 = totalDrag;
+                labelLine.endpoint1 = Vector2D.add(totalDrag, endpointPositionDifference);
+                nucleotide.setState({
+                  // No other changes.
+                });
+              },
+              terminateDrag() {
+                // Do nothing.
+              },
+              affectedNucleotides : []
+            };
+            app.setState({
+              activeDragListener
             });
           }}
         />);
@@ -425,24 +442,29 @@ export namespace Nucleotide {
           fill = "none"
           stroke = "red"
           strokeWidth = {DEFAULT_STROKE_WIDTH}
-          visibility = {this.state.displaySymbolMouseoverFlag && App.Component.getCurrent().state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displaySymbolMouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
           transform = {`translate(${this.state.graphicalAdjustment.x} ${this.state.graphicalAdjustment.y})`}
           width = {this.state.symbolBoundingBoxWidth}
           height = {this.state.symbolBoundingBoxHeight}
           pointerEvents = "all"
           onMouseDown = {event => {
-            let app = App.Component.getCurrent();
             let selectionConstraint = SelectionConstraint.selectionConstraints[app.state.selectionConstraint];
             switch (event.button) {
               case 0 : {
                 // Left mouse button
-                let dragAttempt = selectionConstraint.attemptDrag(this);
-                if (typeof dragAttempt === "string") {
-                  alert(dragAttempt);
+                if (app.state.currentTab === App.Tab.EDIT) {
+                  let dragAttempt = selectionConstraint.attemptDrag(this);
+                  if (typeof dragAttempt === "string") {
+                    alert(dragAttempt);
+                  } else {
+                    app.setState({
+                      activeDragListener : dragAttempt
+                    });
+                  }
                 } else {
                   app.setState({
-                    activeDragListener : dragAttempt
-                  });
+                    activeDragListener : app.windowDragListener
+                  })
                 }
                 break;
               }
@@ -484,19 +506,19 @@ export namespace Nucleotide {
             }
           }}
           onMouseEnter = {() => {
-            let currentAppComponent = App.Component.getCurrent();
+            let currentAppComponent = app;
             if (currentAppComponent.state.activeDragListener === null) {
               this.setState({
                 displaySymbolMouseoverFlag : true
               });
-              let rnaMolecule = App.Component.getCurrent().state.rnaComplexes[this.props.rnaComplexIndex].props.rnaMolecules[this.props.rnaMoleculeIndex];
+              let rnaMolecule = app.state.rnaComplexes[this.props.rnaComplexIndex].props.rnaMolecules[this.props.rnaMoleculeIndex];
               currentAppComponent.setState({
                 mouseOverText : `Nucleotide #${this.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${this.props.symbol}) in RNA molecule \"${rnaMolecule.props.name}\"`
               });
             }
           }}
           onMouseLeave = {() => {
-            if (App.Component.getCurrent().state.activeDragListener === null) {
+            if (app.state.activeDragListener === null) {
               this.setState({
                 displaySymbolMouseoverFlag : false
               })

@@ -18,7 +18,7 @@ const ZOOM_BASE = 1.1;
 const ZOOM_STEP = Math.pow(10, -FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT);
 export const ONE_OVER_LOG_OF_ZOOM_BASE = 1 / Math.log(ZOOM_BASE);
 const DEFAULT_RIGHT_CLICK_MENU_CONTENT = <>
-  Right-click nucleotide to show selection-constraint details.
+  Right-click a nucleotide to display the selection-constraint details.
 </>
 
 export namespace App {
@@ -81,8 +81,9 @@ export namespace App {
 
   export interface DragListener {
     isWindowDragListenerFlag : boolean,
-    getCachedDrag() : Vector2D,
+    initiateDrag() : Vector2D,
     drag(totalDrag : Vector2D) : void,
+    terminateDrag() : void,
     affectedNucleotides : Array<Nucleotide.Component>
   }
 
@@ -96,7 +97,7 @@ export namespace App {
   const toggleShowToolsDivButton = createRef<HTMLButtonElement>();
 
   export class Component extends React.Component<Props, State> {
-    private readonly windowDragListener : DragListener;
+    public readonly windowDragListener : DragListener;
 
     private static current : Component;
 
@@ -105,7 +106,7 @@ export namespace App {
       let app : Component = this;
       this.windowDragListener = {
         isWindowDragListenerFlag : true,
-        getCachedDrag() {
+        initiateDrag() {
           return new Vector2D(app.state.viewX, app.state.viewY)
         },
         drag(totalDrag : Vector2D) {
@@ -115,6 +116,9 @@ export namespace App {
             viewY : totalDrag.y,
             viewYAsString : totalDrag.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
           });
+        },
+        terminateDrag() {
+          // Do nothing.
         },
         affectedNucleotides : []
       };
@@ -582,13 +586,16 @@ export namespace App {
             })
           }}
           onMouseMove = {(event) => {
-            if (this.state.activeDragListener !== null && (this.state.currentTab === Tab.EDIT || this.state.activeDragListener.isWindowDragListenerFlag)) {
+            if (this.state.activeDragListener !== null) {
               let translation = Vector2D.subtract(new Vector2D(event.clientX, event.clientY), this.state.originOfDrag);
               translation.y = -translation.y;
               this.state.activeDragListener.drag(Vector2D.add(this.state.cachedDrag, Vector2D.scaleDown(translation, this.state.zoom * Math.min(this.state.parentDivWidth / this.state.svgContentBoundingBox.width, this.state.svgHeight / this.state.svgContentBoundingBox.height))));
             }
           }}
           onMouseUp = {() => {
+            if (this.state.activeDragListener !== null) {
+              this.state.activeDragListener.terminateDrag();
+            }
             this.setState({
               activeDragListener : null
             });
@@ -682,7 +689,7 @@ export namespace App {
       }
       if (this.state.activeDragListener !== previousState.activeDragListener && this.state.activeDragListener !== null) {
         this.setState({
-          cachedDrag : this.state.activeDragListener.getCachedDrag()
+          cachedDrag : this.state.activeDragListener.initiateDrag()
         })
       }
       if (this.state.mouseOverText !== previousState.mouseOverText) {

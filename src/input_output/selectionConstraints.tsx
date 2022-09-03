@@ -59,13 +59,16 @@ export namespace SelectionConstraint {
     });
     return {
       isWindowDragListenerFlag : false,
-      getCachedDrag() {
+      initiateDrag() {
         return cachedDrag;
       },
       drag(totalDrag : Vector2D) {
         draggedNucleotidesData.forEach((draggedNucleotideData : { positionDifference : Vector2D, nucleotide : Nucleotide.Component }) => draggedNucleotideData.nucleotide.setState({
           position : Vector2D.add(draggedNucleotideData.positionDifference, totalDrag)
         }));
+      },
+      terminateDrag() {
+        // Do nothing.
       },
       affectedNucleotides : draggedNucleotides
     }
@@ -131,13 +134,16 @@ export namespace SelectionConstraint {
             case ReturnType.DragListener:
               return {
                 isWindowDragListenerFlag : false,
-                getCachedDrag() {
+                initiateDrag() {
                   return clickedOnNucleotide.state.position;
                 },
                 drag(totalDrag : Vector2D) {
                   clickedOnNucleotide.setState({
                     position : totalDrag
                   })
+                },
+                terminateDrag() {
+                  // Do nothing.
                 },
                 affectedNucleotides : [clickedOnNucleotide]
               };
@@ -244,11 +250,12 @@ export namespace SelectionConstraint {
             } while (arrayIndex > lowerBoundingNucleotideArrayIndex);
             let interpolationFactorDelta = 1 / draggedNucleotides.length;
             let lowerBoundingNucleotide = nucleotidesData[lowerBoundingNucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component;
+            // let showHighlightUponTerminateDrag = true;
             switch (returnType) {
               case ReturnType.DragListener:
                 return {
                   isWindowDragListenerFlag : false,
-                  getCachedDrag() {
+                  initiateDrag() {
                     return clickedOnNucleotide.state.position;
                   },
                   drag(totalDrag : Vector2D) {
@@ -260,6 +267,9 @@ export namespace SelectionConstraint {
                       });
                       position = Vector2D.add(position, positionDelta);
                     });
+                  },
+                  terminateDrag() {
+                    
                   },
                   affectedNucleotides : draggedNucleotides
                 };
@@ -298,7 +308,7 @@ export namespace SelectionConstraint {
               case ReturnType.DragListener:
                 return {
                   isWindowDragListenerFlag : false,
-                  getCachedDrag() {
+                  initiateDrag() {
                     return clickedOnNucleotide.state.position;
                   },
                   drag(totalDrag : Vector2D) {
@@ -310,6 +320,9 @@ export namespace SelectionConstraint {
                       });
                       position = Vector2D.add(position, positionDelta);
                     });
+                  },
+                  terminateDrag() {
+                    // Do nothing.
                   },
                   affectedNucleotides : draggedNucleotides
                 };
@@ -332,7 +345,7 @@ export namespace SelectionConstraint {
               }
               return {
                 isWindowDragListenerFlag : false,
-                getCachedDrag() {
+                initiateDrag() {
                   return clickedOnNucleotide.state.position;
                 },
                 drag(totalDrag : Vector2D) {
@@ -355,6 +368,9 @@ export namespace SelectionConstraint {
                     });
                     angle += angleDelta;
                   });
+                },
+                terminateDrag() {
+                  // Do nothing.
                 },
                 affectedNucleotides : draggedNucleotides
               };
@@ -895,7 +911,6 @@ export namespace SelectionConstraint {
         scale : number,
         centerXAsString : string,
         centerYAsString : string,
-        radiusAsString : string,
         angleAsString : string,
         scaleAsString : string;
       };
@@ -931,6 +946,7 @@ export namespace SelectionConstraint {
           if (app.state.useDegreesFlag) {
             angleForString = Utils.radiansToDegrees(angleForString);
           }
+          let scale = 1;
           return {
             app,
             clickedOnNucleotide,
@@ -940,13 +956,22 @@ export namespace SelectionConstraint {
             centerY : center.y,
             angle : asPolar.angle,
             radius : asPolar.radius,
-            scale : 1,
+            scale,
             centerXAsString : center.x.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
             centerYAsString : center.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-            radiusAsString : asPolar.radius.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
             angleAsString : angleForString.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-            scaleAsString : "1"
+            scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
           };
+        }
+
+        public override reset() {
+          let scale = this.state.scale;
+          let state = Object.assign(this.getInitialState(), {
+            scale,
+            scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
+          });
+          state.radius = Utils.areEqual(scale, 0) ? 0 : state.radius / scale;
+          this.setState(state);
         }
 
         public override render() {
