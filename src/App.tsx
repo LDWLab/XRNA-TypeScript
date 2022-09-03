@@ -67,7 +67,7 @@ export namespace App {
   };
 
   export enum Tab {
-    IMPORT_EXPORT = "Import/Export",
+    IMPORT_EXPORT = "Import / Export",
     ANNOTATE = "Annotate",
     EDIT = "Edit",
     FORMAT = "Format",
@@ -553,7 +553,7 @@ export namespace App {
                 borderLeft : this.state.rightClickMenuContent === null ? "none" : "solid white 1px"
               }}
             >
-              {this.state.currentTab === Tab.IMPORT_EXPORT ? <></> : this.state.rightClickMenuContent}
+              {(this.state.currentTab === Tab.IMPORT_EXPORT) || (this.state.currentTab === Tab.SETTINGS) ? <></> : this.state.rightClickMenuContent}
             </div>
           </div>
           <button
