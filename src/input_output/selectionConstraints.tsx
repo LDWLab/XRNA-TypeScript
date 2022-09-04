@@ -158,7 +158,7 @@ export namespace SelectionConstraint {
               };
             case ReturnType.FormatJsxElement:
             case ReturnType.AnnotateJsxElement:
-              throw "Not yet implemented.";
+              return "Not yet implemented.";
             default:
               throw "Unrecognized ReturnType.";
           }
@@ -218,7 +218,7 @@ export namespace SelectionConstraint {
                 };
               case ReturnType.FormatJsxElement:
               case ReturnType.AnnotateJsxElement:
-                throw "Not yet implemented.";
+                return "Not yet implemented.";
               default:
                 throw "Unrecognized ReturnType.";
             }
@@ -274,10 +274,10 @@ export namespace SelectionConstraint {
                   affectedNucleotides : draggedNucleotides
                 };
               case ReturnType.EditJsxElement:
-                let ref = React.createRef<SingleStrand.Edit.Component>();
+                let ref = React.createRef<SingleStrand.Edit.ThreePrimeTerminus.Component>();
                 return {
                   ref,
-                  content : <SingleStrand.Edit.Component
+                  content : <SingleStrand.Edit.ThreePrimeTerminus.Component
                     ref = {ref}
                     affectedNucleotides = {draggedNucleotides}
                   />
@@ -327,7 +327,14 @@ export namespace SelectionConstraint {
                   affectedNucleotides : draggedNucleotides
                 };
               case ReturnType.EditJsxElement:
-                return "Not yet implemented.";
+                let ref = React.createRef<SingleStrand.Edit.FivePrimeTerminus.Component>();
+                return {
+                  ref,
+                  content : <SingleStrand.Edit.FivePrimeTerminus.Component
+                    ref = {ref}
+                    affectedNucleotides = {draggedNucleotides}
+                  />
+                };
               case ReturnType.FormatJsxElement:
                 return "Not yet implemented.";
               default:
@@ -337,12 +344,12 @@ export namespace SelectionConstraint {
           let lowerBoundingNucleotide = (nucleotidesData[lowerBoundingNucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component);
           let upperBoundingNucleotide = (nucleotidesData[upperBoundingNucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component);
           let twoPi = 2 * Math.PI;
+          let draggedNucleotides = new Array<Nucleotide.Component>();
+          for (let nucleotideArrayIndex = lowerBoundingNucleotideArrayIndex + 1; nucleotideArrayIndex < upperBoundingNucleotideArrayIndex; nucleotideArrayIndex++) {
+            draggedNucleotides.push(nucleotidesData[nucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component);
+          }
           switch (returnType) {
             case ReturnType.DragListener:
-              let draggedNucleotides = new Array<Nucleotide.Component>();
-              for (let nucleotideArrayIndex = lowerBoundingNucleotideArrayIndex + 1; nucleotideArrayIndex < upperBoundingNucleotideArrayIndex; nucleotideArrayIndex++) {
-                draggedNucleotides.push(nucleotidesData[nucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component);
-              }
               return {
                 isWindowDragListenerFlag : false,
                 initiateDrag() {
@@ -375,7 +382,14 @@ export namespace SelectionConstraint {
                 affectedNucleotides : draggedNucleotides
               };
             case ReturnType.EditJsxElement:
-              return "Not yet implemented.";
+              let ref = React.createRef<SingleStrand.Edit.Internal.Component>()
+              return {
+                ref,
+                content : <SingleStrand.Edit.Internal.Component
+                  ref = {ref}
+                  affectedNucleotides = {draggedNucleotides}
+                />
+              };
             case ReturnType.FormatJsxElement:
               return "Not yet implemented.";
             default:
@@ -449,7 +463,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -545,7 +559,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -610,7 +624,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -624,7 +638,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -648,7 +662,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -667,7 +681,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -701,7 +715,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -715,7 +729,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -728,7 +742,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -742,7 +756,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -756,7 +770,7 @@ export namespace SelectionConstraint {
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
-            throw "Not yet implemented.";
+            return "Not yet implemented.";
           default:
             throw "Unrecognized ReturnType.";
         }
@@ -1143,23 +1157,82 @@ export namespace SelectionConstraint {
 
   namespace SingleStrand {
     export namespace Edit {
-      export type Props = SelectionConstraintProps & {
+      export namespace FivePrimeTerminus {
+        export type Props = SelectionConstraintProps & {
         
-      };
+        };
 
-      export type State = {};
+        export type State = {};
 
-      export class Component extends SelectionConstraintComponent<Props, State> {
-        constructor(props : Props) {
-          super(props);
+        export class Component extends SelectionConstraintComponent<Props, State> {
+          constructor(props : Props) {
+            super(props);
+          }
+  
+          public override getInitialState() {
+            return {};
+          }
+  
+          public override render() {
+            return <>
+              <b>
+                Edit single-stranded region (5' terminus):
+              </b>
+              <br/>
+            </>
+          }
         }
+      }
+      export namespace ThreePrimeTerminus {
+        export type Props = SelectionConstraintProps & {
+        
+        };
 
-        public override getInitialState() {
-          return {};
+        export type State = {};
+
+        export class Component extends SelectionConstraintComponent<Props, State> {
+          constructor(props : Props) {
+            super(props);
+          }
+  
+          public override getInitialState() {
+            return {};
+          }
+  
+          public override render() {
+            return <>
+              <b>
+                Edit single-stranded region (3' terminus):
+              </b>
+              <br/>
+            </>
+          }
         }
+      }
+      export namespace Internal {
+        export type Props = SelectionConstraintProps & {
+        
+        };
 
-        public override render() {
-          return "Not yet implemented.";
+        export type State = {};
+
+        export class Component extends SelectionConstraintComponent<Props, State> {
+          constructor(props : Props) {
+            super(props);
+          }
+  
+          public override getInitialState() {
+            return {};
+          }
+  
+          public override render() {
+            return <>
+              <b>
+                Edit single-stranded region:
+              </b>
+              <br/>
+            </>
+          }
         }
       }
     }
