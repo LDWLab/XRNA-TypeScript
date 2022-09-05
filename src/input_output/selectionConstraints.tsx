@@ -3,7 +3,7 @@ import { App, DEFAULT_STROKE_WIDTH, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaMolecule } from "../components/RnaMolecule";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
-import { Geometry } from "../utils/Geometry";
+import { Circle, Geometry } from "../utils/Geometry";
 import { Utils } from "../utils/Utils";
 
 export namespace SelectionConstraint {
@@ -250,7 +250,16 @@ export namespace SelectionConstraint {
             } while (arrayIndex > lowerBoundingNucleotideArrayIndex);
             let interpolationFactorDelta = 1 / draggedNucleotides.length;
             let lowerBoundingNucleotide = nucleotidesData[lowerBoundingNucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component;
-            // let showHighlightUponTerminateDrag = true;
+            let repositionNucleotidesHelper = (newClickedOnNucleotidePosition : Vector2D) =>{
+              let positionDelta = Vector2D.scaleUp(Vector2D.subtract(lowerBoundingNucleotide.state.position, newClickedOnNucleotidePosition), interpolationFactorDelta);
+              let position = newClickedOnNucleotidePosition;
+              draggedNucleotides.forEach((draggedNucleotide : Nucleotide.Component) => {
+                draggedNucleotide.setState({
+                  position
+                });
+                position = Vector2D.add(position, positionDelta);
+              });
+            };
             switch (returnType) {
               case ReturnType.DragListener:
                 return {
@@ -258,28 +267,22 @@ export namespace SelectionConstraint {
                   initiateDrag() {
                     return clickedOnNucleotide.state.position;
                   },
-                  drag(totalDrag : Vector2D) {
-                    let positionDelta = Vector2D.scaleUp(Vector2D.subtract(lowerBoundingNucleotide.state.position, totalDrag), interpolationFactorDelta);
-                    let position = totalDrag;
-                    draggedNucleotides.forEach((draggedNucleotide : Nucleotide.Component) => {
-                      draggedNucleotide.setState({
-                        position
-                      });
-                      position = Vector2D.add(position, positionDelta);
-                    });
-                  },
+                  drag : repositionNucleotidesHelper,
                   terminateDrag() {
                     
                   },
                   affectedNucleotides : draggedNucleotides
                 };
               case ReturnType.EditJsxElement:
-                let ref = React.createRef<SingleStrand.Edit.ThreePrimeTerminus.Component>();
+                let ref = React.createRef<SingleStrand.Edit.Terminal.Component>();
                 return {
                   ref,
-                  content : <SingleStrand.Edit.ThreePrimeTerminus.Component
+                  content : <SingleStrand.Edit.Terminal.Component
                     ref = {ref}
                     affectedNucleotides = {draggedNucleotides}
+                    indexOfClickedOnNucleotide = {0}
+                    repositionNucleotidesHelper = {repositionNucleotidesHelper}
+                    threePrimeOrFivePrimeLabel = "3'"
                   />
                 };
               case ReturnType.FormatJsxElement:
@@ -304,6 +307,16 @@ export namespace SelectionConstraint {
             } while (arrayIndex < upperBoundingNucleotideArrayIndex);
             let interpolationFactorDelta = 1 / draggedNucleotides.length;
             let upperBoundingNucleotide = nucleotidesData[upperBoundingNucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component;
+            let repositionNucleotidesHelper = (clickedOnNucleotidePosition : Vector2D) => {
+              let positionDelta = Vector2D.scaleUp(Vector2D.subtract(upperBoundingNucleotide.state.position, clickedOnNucleotidePosition), interpolationFactorDelta);
+              let position = clickedOnNucleotidePosition;
+              draggedNucleotides.forEach((draggedNucleotide : Nucleotide.Component) => {
+                draggedNucleotide.setState({
+                  position
+                });
+                position = Vector2D.add(position, positionDelta);
+              });
+            };
             switch (returnType) {
               case ReturnType.DragListener:
                 return {
@@ -311,28 +324,22 @@ export namespace SelectionConstraint {
                   initiateDrag() {
                     return clickedOnNucleotide.state.position;
                   },
-                  drag(totalDrag : Vector2D) {
-                    let positionDelta = Vector2D.scaleUp(Vector2D.subtract(upperBoundingNucleotide.state.position, totalDrag), interpolationFactorDelta);
-                    let position = totalDrag;
-                    draggedNucleotides.forEach((draggedNucleotide : Nucleotide.Component) => {
-                      draggedNucleotide.setState({
-                        position
-                      });
-                      position = Vector2D.add(position, positionDelta);
-                    });
-                  },
+                  drag : repositionNucleotidesHelper,
                   terminateDrag() {
                     // Do nothing.
                   },
                   affectedNucleotides : draggedNucleotides
                 };
               case ReturnType.EditJsxElement:
-                let ref = React.createRef<SingleStrand.Edit.FivePrimeTerminus.Component>();
+                let ref = React.createRef<SingleStrand.Edit.Terminal.Component>();
                 return {
                   ref,
-                  content : <SingleStrand.Edit.FivePrimeTerminus.Component
+                  content : <SingleStrand.Edit.Terminal.Component
                     ref = {ref}
                     affectedNucleotides = {draggedNucleotides}
+                    indexOfClickedOnNucleotide = {0}
+                    repositionNucleotidesHelper = {repositionNucleotidesHelper}
+                    threePrimeOrFivePrimeLabel = "5'"
                   />
                 };
               case ReturnType.FormatJsxElement:
@@ -348,6 +355,36 @@ export namespace SelectionConstraint {
           for (let nucleotideArrayIndex = lowerBoundingNucleotideArrayIndex + 1; nucleotideArrayIndex < upperBoundingNucleotideArrayIndex; nucleotideArrayIndex++) {
             draggedNucleotides.push(nucleotidesData[nucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component);
           }
+          let repositionNucleotidesHelper = (boundingCircle : Circle, beginningAngle : number, angleTraversal : number) => {
+            let angleDelta = angleTraversal / (upperBoundingNucleotideArrayIndex - lowerBoundingNucleotideArrayIndex);
+            let angle = beginningAngle + angleDelta;
+            draggedNucleotides.forEach((draggedNucleotide : Nucleotide.Component) => {
+              draggedNucleotide.setState({
+                position : Vector2D.add(boundingCircle.center, Vector2D.toCartesian(angle, boundingCircle.radius))
+              });
+              angle += angleDelta;
+            });
+          };
+          let flipAngleTraversalHelper = (angleTraversal : number) => {
+            return -(twoPi - angleTraversal);
+          };
+          let calculateRepositioningData = (clickedOnNucleotidePosition : Vector2D) => {
+            let crossProductSign = Utils.sign(Vector2D.crossProduct(Vector2D.subtract(clickedOnNucleotidePosition, lowerBoundingNucleotide.state.position), Vector2D.subtract(upperBoundingNucleotide.state.position, lowerBoundingNucleotide.state.position)));
+            let boundingCircle = Geometry.getBoundingCircleGivenVectorsAreNotColinear(clickedOnNucleotidePosition, lowerBoundingNucleotide.state.position, upperBoundingNucleotide.state.position);
+            let lowerBoundingNucleotidePositionDifference = Vector2D.subtract(lowerBoundingNucleotide.state.position, boundingCircle.center);
+            let upperBoundingNucleotidePositionDifference = Vector2D.subtract(upperBoundingNucleotide.state.position, boundingCircle.center);
+            let lowerBoundingNucleotidePositionDifferenceAsAngle = Vector2D.asAngle(lowerBoundingNucleotidePositionDifference);
+            let upperBoundingNucleotidePositionDifferenceAsAngle = Vector2D.asAngle(upperBoundingNucleotidePositionDifference);
+            let angleTraversal = (upperBoundingNucleotidePositionDifferenceAsAngle - lowerBoundingNucleotidePositionDifferenceAsAngle + twoPi) % twoPi;
+            if (crossProductSign < 0) {
+              angleTraversal = flipAngleTraversalHelper(angleTraversal);
+            }
+            return {
+              boundingCircle,
+              angleTraversal,
+              beginningAngle : lowerBoundingNucleotidePositionDifferenceAsAngle
+            };
+          };
           switch (returnType) {
             case ReturnType.DragListener:
               return {
@@ -355,26 +392,9 @@ export namespace SelectionConstraint {
                 initiateDrag() {
                   return clickedOnNucleotide.state.position;
                 },
-                drag(totalDrag : Vector2D) {
-                  let crossProduct = Vector2D.crossProduct(Vector2D.subtract(totalDrag, lowerBoundingNucleotide.state.position), Vector2D.subtract(upperBoundingNucleotide.state.position, lowerBoundingNucleotide.state.position));
-                  let crossProductSign = Utils.sign(crossProduct);
-                  let boundingCircle = Geometry.getBoundingCircleGivenVectorsAreNotColinear(totalDrag, lowerBoundingNucleotide.state.position, upperBoundingNucleotide.state.position);
-                  let lowerBoundingNucleotidePositionDifference = Vector2D.subtract(lowerBoundingNucleotide.state.position, boundingCircle.center);
-                  let upperBoundingNucleotidePositionDifference = Vector2D.subtract(upperBoundingNucleotide.state.position, boundingCircle.center);
-                  let lowerBoundingNucleotidePositionDifferenceAsAngle = Vector2D.asAngle(lowerBoundingNucleotidePositionDifference);
-                  let upperBoundingNucleotidePositionDifferenceAsAngle = Vector2D.asAngle(upperBoundingNucleotidePositionDifference);
-                  let angleTraversal = (upperBoundingNucleotidePositionDifferenceAsAngle - lowerBoundingNucleotidePositionDifferenceAsAngle + twoPi) % twoPi;
-                  if (crossProductSign < 0) {
-                    angleTraversal = -(twoPi - angleTraversal);
-                  }
-                  let angleDelta = angleTraversal / (upperBoundingNucleotideArrayIndex - lowerBoundingNucleotideArrayIndex);
-                  let angle = lowerBoundingNucleotidePositionDifferenceAsAngle + angleDelta;
-                  draggedNucleotides.forEach((draggedNucleotide : Nucleotide.Component) => {
-                    draggedNucleotide.setState({
-                      position : Vector2D.add(boundingCircle.center, Vector2D.toCartesian(angle, boundingCircle.radius))
-                    });
-                    angle += angleDelta;
-                  });
+                drag : (totalDrag : Vector2D) => {
+                  let repositioningData = calculateRepositioningData(totalDrag);
+                  repositionNucleotidesHelper(repositioningData.boundingCircle, repositioningData.beginningAngle, repositioningData.angleTraversal);
                 },
                 terminateDrag() {
                   // Do nothing.
@@ -382,12 +402,23 @@ export namespace SelectionConstraint {
                 affectedNucleotides : draggedNucleotides
               };
             case ReturnType.EditJsxElement:
+              let boundingNucleotideCenter = Vector2D.scaleUp(Vector2D.add(lowerBoundingNucleotide.state.position, upperBoundingNucleotide.state.position), 0.5);
+              let normal = Vector2D.normalize(Vector2D.orthogonalize(Vector2D.subtract(lowerBoundingNucleotide.state.position, upperBoundingNucleotide.state.position)));
+              let initialRepositioningData = calculateRepositioningData(clickedOnNucleotide.state.position);
               let ref = React.createRef<SingleStrand.Edit.Internal.Component>()
               return {
                 ref,
                 content : <SingleStrand.Edit.Internal.Component
                   ref = {ref}
                   affectedNucleotides = {draggedNucleotides}
+                  repositionNucleotidesHelper = {repositionNucleotidesHelper}
+                  flipAngleTraversalHelper = {flipAngleTraversalHelper}
+                  center = {boundingNucleotideCenter}
+                  normal = {normal}
+                  initialSignedDistance = {Vector2D.dotProduct(Vector2D.subtract(initialRepositioningData.boundingCircle.center, boundingNucleotideCenter), normal)}
+                  initialAngleTraversal = {initialRepositioningData.angleTraversal}
+                  initialBoundingCircle = {initialRepositioningData.boundingCircle}
+                  beginningAngle = {initialRepositioningData.beginningAngle}
                 />
               };
             case ReturnType.FormatJsxElement:
@@ -1157,12 +1188,19 @@ export namespace SelectionConstraint {
 
   namespace SingleStrand {
     export namespace Edit {
-      export namespace FivePrimeTerminus {
+      export namespace Terminal {
         export type Props = SelectionConstraintProps & {
-        
+          indexOfClickedOnNucleotide : number,
+          repositionNucleotidesHelper : (newClickedOnNucleotidePosition : Vector2D) => void,
+          threePrimeOrFivePrimeLabel : "3'" | "5'"
         };
 
-        export type State = {};
+        export type State = {
+          terminalNucleotidePositionXAsString : string,
+          terminalNucleotidePositionYAsString : string,
+          terminalNucleotidePositionX : number,
+          terminalNucleotidePositionY : number
+        };
 
         export class Component extends SelectionConstraintComponent<Props, State> {
           constructor(props : Props) {
@@ -1170,40 +1208,64 @@ export namespace SelectionConstraint {
           }
   
           public override getInitialState() {
-            return {};
+            let terminalNucleotidePosition = this.props.affectedNucleotides[this.props.indexOfClickedOnNucleotide].state.position;
+            return {
+              terminalNucleotidePositionXAsString : terminalNucleotidePosition.x.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+              terminalNucleotidePositionYAsString : terminalNucleotidePosition.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+              terminalNucleotidePositionX : terminalNucleotidePosition.x,
+              terminalNucleotidePositionY : terminalNucleotidePosition.y
+            };
           }
   
           public override render() {
             return <>
               <b>
-                Edit single-stranded region (5' terminus):
+                Edit single-stranded region ({this.props.threePrimeOrFivePrimeLabel} terminus):
               </b>
               <br/>
-            </>
-          }
-        }
-      }
-      export namespace ThreePrimeTerminus {
-        export type Props = SelectionConstraintProps & {
-        
-        };
-
-        export type State = {};
-
-        export class Component extends SelectionConstraintComponent<Props, State> {
-          constructor(props : Props) {
-            super(props);
-          }
-  
-          public override getInitialState() {
-            return {};
-          }
-  
-          public override render() {
-            return <>
               <b>
-                Edit single-stranded region (3' terminus):
+                {this.props.threePrimeOrFivePrimeLabel} Nucleotide position:
               </b>
+              <br/>
+              <label>
+                x:&nbsp;
+                <input
+                  type = "number"
+                  value = {this.state.terminalNucleotidePositionXAsString}
+                  onChange = {event => {
+                    this.setState({
+                      terminalNucleotidePositionXAsString : event.target.value
+                    });
+                    let newThreePrimeNucleotidePositionX = Number.parseFloat(event.target.value);
+                    if (!Number.isNaN(newThreePrimeNucleotidePositionX)) {
+                      this.setState({
+                        terminalNucleotidePositionX : newThreePrimeNucleotidePositionX
+                      });
+                      this.props.repositionNucleotidesHelper(new Vector2D(newThreePrimeNucleotidePositionX, this.state.terminalNucleotidePositionY));
+                    }
+                  }}
+                />
+              </label>
+              <br/>
+              <label>
+                y:&nbsp;
+                <input
+                  type = "number"
+                  value = {this.state.terminalNucleotidePositionYAsString}
+                  onChange = {event => {
+                    this.setState({
+                      terminalNucleotidePositionYAsString : event.target.value
+                    });
+                    let newThreePrimeNucleotidePositionY = Number.parseFloat(event.target.value);
+                    if (!Number.isNaN(newThreePrimeNucleotidePositionY)) {
+                      this.setState({
+                        terminalNucleotidePositionY : newThreePrimeNucleotidePositionY
+                      });
+                      this.props.repositionNucleotidesHelper(new Vector2D(this.state.terminalNucleotidePositionX, newThreePrimeNucleotidePositionY));
+                    }
+                  }}
+                />
+              </label>
               <br/>
             </>
           }
@@ -1211,10 +1273,22 @@ export namespace SelectionConstraint {
       }
       export namespace Internal {
         export type Props = SelectionConstraintProps & {
-        
+          repositionNucleotidesHelper : (boundingCircle : Circle, beginningAngle : number, angleTraversal : number) => void,
+          flipAngleTraversalHelper : (angleTraversal : number) => number,
+          center : Vector2D,
+          normal : Vector2D,
+          initialSignedDistance : number,
+          initialAngleTraversal : number,
+          initialBoundingCircle : Circle,
+          beginningAngle : number
         };
 
-        export type State = {};
+        export type State = {
+          signedDistanceAsString : string,
+          clockwiseFlag : boolean,
+          angleTraversal : number,
+          boundingCircle : Circle
+        };
 
         export class Component extends SelectionConstraintComponent<Props, State> {
           constructor(props : Props) {
@@ -1222,7 +1296,12 @@ export namespace SelectionConstraint {
           }
   
           public override getInitialState() {
-            return {};
+            return {
+              signedDistanceAsString : this.props.initialSignedDistance.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+              clockwiseFlag : this.props.initialAngleTraversal < 0,
+              angleTraversal : this.props.initialAngleTraversal,
+              boundingCircle : this.props.initialBoundingCircle
+            };
           }
   
           public override render() {
@@ -1230,6 +1309,47 @@ export namespace SelectionConstraint {
               <b>
                 Edit single-stranded region:
               </b>
+              <br/>
+              <label>
+                Signed distance:&nbsp;
+                <input
+                  type = "number"
+                  value = {this.state.signedDistanceAsString}
+                  onChange = {event => {
+                    this.setState({
+                      signedDistanceAsString : event.target.value
+                    });
+                    let newSignedDistance = Number.parseFloat(event.target.value);
+                    if (!Number.isNaN(newSignedDistance)) {
+                      let newBoundingCircle = {
+                        center : Vector2D.add(this.props.center, Vector2D.scaleUp(this.props.normal, newSignedDistance)),
+                        radius : Math.abs(newSignedDistance)
+                      };
+                      this.setState({
+                        boundingCircle : newBoundingCircle
+                      });
+                      this.props.repositionNucleotidesHelper(newBoundingCircle, this.props.beginningAngle, this.state.angleTraversal);
+                    }
+                  }}
+                />
+              </label>
+              <br/>
+              <label>
+                Clockwise?&nbsp;
+                <input
+                  type = "checkbox"
+                  checked = {this.state.clockwiseFlag}
+                  onChange = {() => {
+                    let newAngleTraversal = this.props.flipAngleTraversalHelper(this.state.angleTraversal);
+                    console.log(`newAngleTraversal: ${newAngleTraversal}`);
+                    this.setState({
+                      clockwiseFlag : !this.state.clockwiseFlag,
+                      angleTraversal : newAngleTraversal
+                    });
+                    this.props.repositionNucleotidesHelper(this.state.boundingCircle, this.props.beginningAngle, newAngleTraversal);
+                  }}
+                />
+              </label>
               <br/>
             </>
           }

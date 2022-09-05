@@ -7,6 +7,10 @@ export default class Vector2D {
     this.y = y;
   }
 
+  public static copy(v : Vector2D) : Vector2D {
+    return new Vector2D(v.x, v.y);
+  }
+
   public static add(v0 : Vector2D, v1 : Vector2D) : Vector2D {
     return new Vector2D(
       v0.x + v1.x,
@@ -113,6 +117,10 @@ export default class Vector2D {
 
   public static angleBetween(v0 : Vector2D, v1 : Vector2D) : number {
     return Math.acos(Vector2D.dotProduct(v0, v1) / Math.sqrt(Vector2D.magnitudeSquared(v0) * Vector2D.magnitudeSquared(v1)));
+  }
+
+  public static scalarProjection(v : Vector2D, direction : Vector2D) {
+    return Vector2D.dotProduct(v, direction) / Vector2D.magnitude(direction);
   }
 
   public static project(v : Vector2D, direction : Vector2D) : Vector2D {
