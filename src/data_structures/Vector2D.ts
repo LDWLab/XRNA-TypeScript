@@ -44,9 +44,17 @@ export default class Vector2D {
     return Vector2D.scaleDown(v, Vector2D.magnitude(v));
   }
 
-  public static orthogonalize(v : Vector2D) {
+  public static orthogonalizeRight(v : Vector2D) {
+    // Equivalent to a 90-degree turn right.
+    return new Vector2D(v.y, -v.x);
+  }
+
+  public static orthogonalizeLeft(v : Vector2D) {
+    // Equivalent to a 90-degree turn left.
     return new Vector2D(-v.y, v.x);
   }
+
+  public static orthogonalize = Vector2D.orthogonalizeLeft;
 
   public static interpolate(v0 : Vector2D, v1 : Vector2D, interpolationFactor : number) : Vector2D {
     let oneMinusInterpolationFactor = 1 - interpolationFactor;
