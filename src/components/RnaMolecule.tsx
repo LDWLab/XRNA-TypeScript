@@ -53,7 +53,7 @@ export namespace RnaMolecule {
           basePair = arrayEntry.nucleotideProps.basePair;
         } else {
           basePair = nucleotideReference.state.basePair;
-          if (basePair !== undefined && nucleotideReference.isGreaterIndexInBasePair(basePair)) {
+          if (basePair !== undefined && nucleotideReference.isGreaterIndexInBasePair()) {
             let basePairNucleotide = rnaComplex.props.rnaMolecules[basePair.rnaMoleculeIndex].findNucleotideByIndex(basePair.nucleotideIndex).arrayEntry.nucleotideReference.current as Nucleotide.Component;
             countBonds++;
             totalBondLengthSum += Vector2D.distance(nucleotideReference.state.position, basePairNucleotide.state.position);

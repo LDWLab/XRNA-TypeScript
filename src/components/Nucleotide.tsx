@@ -101,9 +101,12 @@ export namespace Nucleotide {
       });
     }
 
-    public isGreaterIndexInBasePair(basePair : BasePair) {
+    public isGreaterIndexInBasePair() {
+      let basePair = this.state.basePair;
+      if (basePair === undefined) {
+        throw "Undefined condition";
+      }
       return basePair.rnaMoleculeIndex < this.props.rnaMoleculeIndex || (basePair.rnaMoleculeIndex === this.props.rnaMoleculeIndex && basePair.nucleotideIndex < this.props.nucleotideIndex);
-
     }
 
     public updateBasePairJsxWithCurrentPositions() : void {
@@ -195,7 +198,7 @@ export namespace Nucleotide {
         symbolBoundingBoxHeight : symbolBoundingBox.height
       });
       
-      if (this.state.basePair && this.isGreaterIndexInBasePair(this.state.basePair)) {
+      if (this.state.basePair && this.isGreaterIndexInBasePair()) {
         this.updateBasePairJsxWithCurrentPositions();
       }
     }

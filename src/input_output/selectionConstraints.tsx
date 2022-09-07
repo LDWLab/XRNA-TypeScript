@@ -893,7 +893,7 @@ export namespace SelectionConstraint {
       additionalRotation : number,
       additionalRadiusScale : number
     };
-    
+
     export type Props = SelectionConstraintProps & {
       indexOfBoundingNucleotide0 : number,
       indexOfBoundingNucleotide1 : number
@@ -935,7 +935,7 @@ export namespace SelectionConstraint {
         let boundingNucleotide1 = this.props.affectedNucleotides[this.props.indexOfBoundingNucleotide1];
         let origin = Vector2D.scaleUp(Vector2D.add(boundingNucleotide0.state.position, boundingNucleotide1.state.position), 0.5);
         let conventionalDifference = Vector2D.subtract(boundingNucleotide0.state.position, boundingNucleotide1.state.position);
-        if (boundingNucleotide0.isGreaterIndexInBasePair(boundingNucleotide0.state.basePair as Nucleotide.BasePair)) {
+        if (boundingNucleotide0.isGreaterIndexInBasePair()) {
           conventionalDifference = Vector2D.negate(conventionalDifference);
         }
         let asPolar = Vector2D.toPolar(conventionalDifference);
@@ -1439,7 +1439,7 @@ export namespace SelectionConstraint {
               <br/>
               {`In RNA complex "${rnaComplex.props.name}"`}
               <br/>
-              {`${this.props.affectedNucleotides.length - 2} free nucleotides between nucleotide #${fivePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (exclusive) and nucleotide #${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (exclusive)`}
+              {`${this.props.affectedNucleotides.length - 2} free nucleotides between nucleotide #${fivePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${fivePrimeNucleotide.props.symbol}, exclusive) and nucleotide #${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${threePrimeNucleotide.props.symbol}, exclusive)`}
               <br/>
               <label>
                 Clockwise?&nbsp;
@@ -1547,24 +1547,24 @@ export namespace SelectionConstraint {
           let rnaMoleculesAndNucleotidesInfo : JSX.Element;
           if (this.state.boundingNucleotide0.props.rnaMoleculeIndex === this.state.boundingNucleotide1.props.rnaMoleculeIndex) {
             rnaMoleculesAndNucleotidesInfo = <>
-              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide0.props.symbol}, inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide2.props.symbol}, inclusive)`}
               <br/>
               Contiguously bound to:
               <br/>
-              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
               {`In RNA molecule "${rnaMolecule0.props.name}"`}
               <br/>
             </>;
           } else {
             rnaMoleculesAndNucleotidesInfo = <>
-              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide0.props.symbol}, inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide2.props.symbol}, inclusive)`}
               <br/>
               {`In RNA molecule "${rnaMolecule0.props.name}"`}
               <br/>
               Contiguously bound to:
               <br/>
-              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
               {`In RNA molecule "${rnaMolecule1.props.name}"`}
               <br/>
@@ -1621,24 +1621,24 @@ export namespace SelectionConstraint {
           let rnaMoleculesAndNucleotidesInfo : JSX.Element;
           if (this.state.boundingNucleotide0.props.rnaMoleculeIndex === this.state.boundingNucleotide1.props.rnaMoleculeIndex) {
             rnaMoleculesAndNucleotidesInfo = <>
-              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide0.props.symbol}, inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide2.props.symbol}, inclusive)`}
               <br/>
               Bound to:
               <br/>
-              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
               {`In RNA molecule "${rnaMolecule0.props.name}"`}
               <br/>
             </>;
           } else {
             rnaMoleculesAndNucleotidesInfo = <>
-              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide0.props.symbol}, inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide2.props.symbol}, inclusive)`}
               <br/>
               {`In RNA molecule "${rnaMolecule0.props.name}"`}
               <br/>
               Contiguously bound to:
               <br/>
-              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive)`}
+              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
               {`In RNA molecule "${rnaMolecule1.props.name}"`}
               <br/>
@@ -1646,7 +1646,7 @@ export namespace SelectionConstraint {
           }
           return <>
             <b>
-              Edit single helix:
+              Edit stacked helices:
             </b>
             <br/>
             {rnaMoleculesAndNucleotidesInfo}
@@ -1656,6 +1656,40 @@ export namespace SelectionConstraint {
             <br/>
           </>;
         }
+      }
+    }
+  }
+
+  namespace RnaSubdomain {
+    type Props = PolarSelectionConstraint.Props;
+
+    type State = PolarSelectionConstraint.State;
+
+    export class Component extends PolarSelectionConstraint.Component<Props, State> {
+      constructor(props : Props) {
+        super(props);
+      }
+
+      public override getInitialState() {
+        return this.getInitialStateHelper();
+      }
+
+      public override render() {
+        let fivePrimeNucleotide = this.state.boundingNucleotide0;
+        let threePrimeNucleotide = this.state.boundingNucleotide1;
+        if (fivePrimeNucleotide.isGreaterIndexInBasePair()) {
+          let tempNucleotide = fivePrimeNucleotide;
+          fivePrimeNucleotide = threePrimeNucleotide;
+          threePrimeNucleotide = tempNucleotide;
+        }
+        return <>
+          <b>
+            Edit RNA subdomain:
+          </b>
+          5' Nucleotide
+          <br/>
+          <br/>
+        </>;
       }
     }
   }
