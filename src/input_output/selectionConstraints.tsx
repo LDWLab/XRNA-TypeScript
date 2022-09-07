@@ -212,8 +212,8 @@ export namespace SelectionConstraint {
                   content : <SingleBasePair.Edit.Component
                     ref = {ref}
                     affectedNucleotides = {draggedNucleotides}
-                    indexOfClickedOnNucleotide = {0}
-                    indexOfBasePairedNucleotide = {1}
+                    indexOfBoundingNucleotide0 = {0}
+                    indexOfBoundingNucleotide1 = {1}
                   />
                 };
               case ReturnType.FormatJsxElement:
@@ -454,23 +454,38 @@ export namespace SelectionConstraint {
           clickedOnNucleotide,
           basePairedNucleotide
         ];
-        if (basePairedNucleotideArrayIndexDelta !== undefined) {
+        let indexOfBoundingNucleotide0 : number;
+        let indexOfBoundingNucleotide1 : number;
+        let indexOfBoundingNucleotide2 : number;
+        let indexOfBoundingNucleotide3 : number;
+        if (basePairedNucleotideArrayIndexDelta === undefined) {
+          // Implies the base pair is isolated.
+          indexOfBoundingNucleotide0 = 0;
+          indexOfBoundingNucleotide1 = 1;
+          indexOfBoundingNucleotide2 = 0;
+          indexOfBoundingNucleotide3 = 1;
+        } else {
           appendDraggedNucleotides(rnaMolecule, basePairedRnaMolecule, basePairedRnaMoleculeIndex, clickedOnNucleotideArrayIndex, basePairedNucleotideArrayIndex, 1, basePairedNucleotideArrayIndexDelta, draggedNucleotides);
+          indexOfBoundingNucleotide0 = draggedNucleotides.length - 1;
+          indexOfBoundingNucleotide1 = draggedNucleotides.length - 2;
           appendDraggedNucleotides(rnaMolecule, basePairedRnaMolecule, basePairedRnaMoleculeIndex, clickedOnNucleotideArrayIndex, basePairedNucleotideArrayIndex, -1, -basePairedNucleotideArrayIndexDelta, draggedNucleotides);
+          indexOfBoundingNucleotide2 = draggedNucleotides.length - 1;
+          indexOfBoundingNucleotide3 = draggedNucleotides.length - 2;
           if (clickedOnNucleotide.props.rnaMoleculeIndex === basePairedRnaMoleculeIndex) {
             // Intramolecular helix.
-            draggedNucleotides.sort((draggedNucleotide0 : Nucleotide.Component, draggedNucleotide1 : Nucleotide.Component) => draggedNucleotide0.props.nucleotideIndex - draggedNucleotide1.props.nucleotideIndex);
-            let greatestNucleotideIndexConsecutiveToTheMinimumNucleotideIndex = draggedNucleotides[0].props.nucleotideIndex;
-            for (let i = 1; i < draggedNucleotides.length; i++) {
-              let nucleotideIndex = draggedNucleotides[i].props.nucleotideIndex;
+            let sortedDraggedNucleotides = [...draggedNucleotides];
+            sortedDraggedNucleotides.sort((draggedNucleotide0 : Nucleotide.Component, draggedNucleotide1 : Nucleotide.Component) => draggedNucleotide0.props.nucleotideIndex - draggedNucleotide1.props.nucleotideIndex);
+            let greatestNucleotideIndexConsecutiveToTheMinimumNucleotideIndex = sortedDraggedNucleotides[0].props.nucleotideIndex;
+            for (let i = 1; i < sortedDraggedNucleotides.length; i++) {
+              let nucleotideIndex = sortedDraggedNucleotides[i].props.nucleotideIndex;
               if (nucleotideIndex !== greatestNucleotideIndexConsecutiveToTheMinimumNucleotideIndex + 1) {
                 break;
               }
               greatestNucleotideIndexConsecutiveToTheMinimumNucleotideIndex = nucleotideIndex;
             }
-            let leastNucleotideIndexConsecutiveToTheMaximumNucleotideIndex = draggedNucleotides[draggedNucleotides.length - 1].props.nucleotideIndex;
-            for (let i = draggedNucleotides.length - 2; i >= 0; i--) {
-              let nucleotideIndex = draggedNucleotides[i].props.nucleotideIndex;
+            let leastNucleotideIndexConsecutiveToTheMaximumNucleotideIndex = sortedDraggedNucleotides[sortedDraggedNucleotides.length - 1].props.nucleotideIndex;
+            for (let i = sortedDraggedNucleotides.length - 2; i >= 0; i--) {
+              let nucleotideIndex = sortedDraggedNucleotides[i].props.nucleotideIndex;
               if (nucleotideIndex !== leastNucleotideIndexConsecutiveToTheMaximumNucleotideIndex - 1) {
                 break;
               }
@@ -497,6 +512,18 @@ export namespace SelectionConstraint {
           case ReturnType.DragListener:
             return linearDrag(clickedOnNucleotide.state.position, draggedNucleotides);
           case ReturnType.EditJsxElement:
+            let ref = React.createRef<SingleHelix.Edit.Component>();
+            return {
+              ref,
+              content : <SingleHelix.Edit.Component
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+                indexOfBoundingNucleotide0 = {indexOfBoundingNucleotide0}
+                indexOfBoundingNucleotide1 = {indexOfBoundingNucleotide1}
+                indexOfBoundingNucleotide2 = {indexOfBoundingNucleotide2}
+                indexOfBoundingNucleotide3 = {indexOfBoundingNucleotide3}
+              />
+            };
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
@@ -832,9 +859,249 @@ export namespace SelectionConstraint {
     }
   }
 
+  type NucleotideTransformationData = {
+    nucleotide : Nucleotide.Component,
+    additionalRotation : number,
+    additionalRadiusScale : number
+  };
+
+  type RepositioningData = {
+    boundingCircle : Circle,
+    angleTraversal : number,
+    beginningAngle : number
+  };
+
+  type PolarSelectionConstraintProps = SelectionConstraintProps & {
+    indexOfBoundingNucleotide0 : number,
+    indexOfBoundingNucleotide1 : number
+  };
+
+  type PolarSelectionConstraintState = {
+    app : App.Component,
+    transformationData : Array<NucleotideTransformationData>,
+    originX : number,
+    originY : number,
+    // Exclusively use radians for this angle value.
+    // Convert to and from degrees when displaying it in the UI if necessary.
+    angle : number,
+    radius : number,
+    scale : number,
+    originXAsString : string,
+    originYAsString : string,
+    angleAsString : string,
+    scaleAsString : string,
+    boundingNucleotide0 : Nucleotide.Component,
+    boundingNucleotide1 : Nucleotide.Component
+  };
+
+  abstract class PolarSelectionConstraintComponent<Props extends PolarSelectionConstraintProps, State extends PolarSelectionConstraintState> extends SelectionConstraintComponent<Props, State> {
+    public override reset() {
+      // Prevent state.<scale> from being re-defined.
+      let scale = this.state.scale;
+      let state = this.getInitialState();
+      this.setState(Object.assign(state, {
+        scale,
+        scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+        radius : Utils.areEqual(scale, 0) ? 0 : state.radius / scale
+      }));
+    }
+
+    protected getInitialStateHelper() {
+      let app = App.Component.getCurrent();
+      let boundingNucleotide0 = this.props.affectedNucleotides[this.props.indexOfBoundingNucleotide0];
+      let boundingNucleotide1 = this.props.affectedNucleotides[this.props.indexOfBoundingNucleotide1];
+      let origin = Vector2D.scaleUp(Vector2D.add(boundingNucleotide0.state.position, boundingNucleotide1.state.position), 0.5);
+      let conventionalDifference = Vector2D.subtract(boundingNucleotide0.state.position, boundingNucleotide1.state.position);
+      if (boundingNucleotide0.isGreaterIndexInBasePair(boundingNucleotide0.state.basePair as Nucleotide.BasePair)) {
+        conventionalDifference = Vector2D.negate(conventionalDifference);
+      }
+      let asPolar = Vector2D.toPolar(conventionalDifference);
+      asPolar.radius *= 0.5;
+      // Correct angle to adhere to convention (90-degree turn clockwise).
+      asPolar.angle -= Math.PI * 0.5;
+      let oneOverScale = 1 / asPolar.radius;
+      let angleForString = asPolar.angle;
+      if (app.state.useDegreesFlag) {
+        angleForString = Utils.radiansToDegrees(angleForString);
+      }
+      let scale = 1;
+      return Object.assign(asPolar, {
+        app,
+        boundingNucleotide0,
+        boundingNucleotide1,
+        transformationData : this.props.affectedNucleotides.map((nucleotide : Nucleotide.Component) => {
+          let positionDifference = Vector2D.subtract(nucleotide.state.position, origin);
+          return {
+            nucleotide,
+            additionalRotation : Vector2D.asAngle(positionDifference) - asPolar.angle,
+            additionalRadiusScale : Vector2D.magnitude(positionDifference) * oneOverScale
+          };
+        }),
+        originX : origin.x,
+        originY : origin.y,
+        originXAsString : origin.x.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+        originYAsString : origin.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+        angleAsString : angleForString.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+        scale,
+        scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
+      });
+    }
+
+    protected getNewPositions(centerX : number, centerY : number, radius : number, orientationAngle : number, scale : number) {
+      return this.state.transformationData.map((nucleotideTransformationDatum : NucleotideTransformationData) => {
+        let angle = orientationAngle + nucleotideTransformationDatum.additionalRotation;
+        return Vector2D.add(new Vector2D(centerX, centerY), Vector2D.toCartesian(angle, radius * scale * nucleotideTransformationDatum.additionalRadiusScale));
+      });
+    }
+
+    protected repositionNucleotides(newPositions : Array<Vector2D>) {
+      for (let i = 0; i < newPositions.length; i++) {
+        this.state.transformationData[i].nucleotide.setState({
+          position : newPositions[i]
+        });
+      }
+    }
+    
+    protected repositionNucleotidesAndBasePairs(newPositions : Array<Vector2D>) {
+      this.repositionNucleotides(newPositions);
+      for (let i = 1; i < this.props.affectedNucleotides.length; i += 2) {
+        let affectedNucleotide0 = this.props.affectedNucleotides[i - 1];
+        let affectedNucleotide1 = this.props.affectedNucleotides[i];
+        if (affectedNucleotide0.state.basePair === undefined) {
+          // Free nucleotides encountered. These are added to <affectedNucleotides> at its end.
+          break;
+        }
+        let position0 = newPositions[i - 1];
+        let position1 = newPositions[i];
+        if (affectedNucleotide0.state.basePairJsx !== undefined) {
+          affectedNucleotide0.updateBasePairJsx(position0, position1);
+        } 
+        if (affectedNucleotide1.state.basePairJsx !== undefined) {
+          affectedNucleotide1.updateBasePairJsx(position1, position0);
+        }
+      }
+    }
+
+    protected renderTransformationData() {
+      return <>
+        <b>
+          Origin position:
+        </b>
+        <br/>
+        <label>
+          x:&nbsp;
+          <input
+            type = "number"
+            step = {0.5}
+            value = {this.state.originXAsString}
+            onChange = {event => {
+              this.setState({
+                originXAsString : event.target.value
+              });
+              let newOriginX = Number.parseFloat(event.target.value);
+              if (Number.isNaN(newOriginX)) {
+                return;
+              }
+              this.setState({
+                originX : newOriginX
+              });
+              this.repositionNucleotides(this.getNewPositions(newOriginX, this.state.originY, this.state.radius, this.state.angle, this.state.scale));
+            }}
+          />
+        </label>
+        <br/>
+        <label>
+          y:&nbsp;
+          <input
+            type = "number"
+            step = {0.5}
+            value = {this.state.originYAsString}
+            onChange = {event => {
+              this.setState({
+                originYAsString : event.target.value
+              });
+              let newOriginY = Number.parseFloat(event.target.value);
+              if (Number.isNaN(newOriginY)) {
+                return;
+              }
+              this.setState({
+                originY : newOriginY
+              });
+              this.repositionNucleotides(this.getNewPositions(this.state.originX, newOriginY, this.state.radius, this.state.angle, this.state.scale));
+            }}
+          />
+        </label>
+        <br/>
+        <label>
+          θ:&nbsp;
+          <input
+            type = "number"
+            // 1 degree === 0.01745329251 radians
+            step = {this.state.app.state.useDegreesFlag ? 1 : 0.01745329251}
+            value = {this.state.angleAsString}
+            onChange = {event => {
+              this.setState({
+                angleAsString : event.target.value
+              });
+              let newAngle = Number.parseFloat(event.target.value);
+              if (Number.isNaN(newAngle)) {
+                return;
+              }
+              if (this.state.app.state.useDegreesFlag) {
+                newAngle = Utils.degreesToRadians(newAngle);
+              }
+              this.setState({
+                angle : newAngle
+              });
+              this.repositionNucleotidesAndBasePairs(this.getNewPositions(this.state.originX, this.state.originY, this.state.radius, newAngle, this.state.scale));
+            }}
+          />
+        </label>
+        {this.state.app.state.useDegreesFlag ? "°" : "radians"}
+        <br/>
+        <label>
+          scale:&nbsp;
+          <input
+            type = "number"
+            step = {0.1}
+            value = {this.state.scaleAsString}
+            onChange = {event => {
+              this.setState({
+                scaleAsString : event.target.value
+              });
+              let newScale = Number.parseFloat(event.target.value);
+              if (Number.isNaN(newScale)) {
+                return;
+              }
+              this.setState({
+                scale : newScale
+              });
+              this.repositionNucleotidesAndBasePairs(this.getNewPositions(this.state.originX, this.state.originY, this.state.radius, this.state.angle, newScale));
+            }}
+          />
+        </label>
+        <br/>
+        <button
+          onClick = {() => {
+            let normalDirection = Vector2D.toNormalCartesian(this.state.angle);
+            let origin = new Vector2D(this.state.originX, this.state.originY);
+            this.repositionNucleotidesAndBasePairs(this.state.transformationData.map((nucleotideTransformationData : NucleotideTransformationData) => {
+              let currentPosition = Vector2D.subtract(nucleotideTransformationData.nucleotide.state.position, origin);
+              let transformedPosition = Vector2D.add(currentPosition, Vector2D.scaleUp(Vector2D.projectUsingNormalDirection(currentPosition, normalDirection), -2));
+              nucleotideTransformationData.additionalRotation = Vector2D.asAngle(transformedPosition) - this.state.angle;
+              return Vector2D.add(origin, transformedPosition);
+            }));
+          }}
+        >
+          Flip
+        </button>
+      </>;
+    }
+  }
+
   namespace SingleNucleotide {
     export namespace Edit {
-      export type Props = SelectionConstraintProps & {};
+      export type Props = SelectionConstraintProps;
 
       export type State = {
         xAsString : string,
@@ -934,264 +1201,48 @@ export namespace SelectionConstraint {
     }
   }
 
-  type NucleotideTransformationData = {
-    nucleotide : Nucleotide.Component,
-    additionalRotation : number,
-    additionalRadiusScale : number
-  };
-
-  type RepositioningData = {
-    boundingCircle : Circle,
-    angleTraversal : number,
-    beginningAngle : number
-  };
-
   namespace SingleBasePair {
     export namespace Edit {
-      export type Props = SelectionConstraintProps & {
-        indexOfClickedOnNucleotide : number,
-        indexOfBasePairedNucleotide : number
-      };
+      export type Props = PolarSelectionConstraintProps;
 
-      export type State = {
-        app : App.Component,
-        clickedOnNucleotide : Nucleotide.Component,
-        basePairedNucleotide : Nucleotide.Component,
-        nucleotideTransformationData : Array<NucleotideTransformationData>,
-        centerX : number,
-        centerY : number,
-        // Exclusively use radians for the internal angle value.
-        // Convert to and from degrees when interacting with UI if necessary.
-        angle : number,
-        radius : number,
-        scale : number,
-        centerXAsString : string,
-        centerYAsString : string,
-        angleAsString : string,
-        scaleAsString : string;
-      };
+      export type State = PolarSelectionConstraintState;
 
-      export class Component extends SelectionConstraintComponent<Props, State> {
+      export class Component extends PolarSelectionConstraintComponent<Props, State> {
         constructor(props : Props) {
           super(props);
         }
 
-        public override getInitialState() {
-          let app = App.Component.getCurrent();
-          let clickedOnNucleotide = this.props.affectedNucleotides[this.props.indexOfClickedOnNucleotide];
-          let basePairedNucleotide = this.props.affectedNucleotides[this.props.indexOfBasePairedNucleotide];
-          let center = Vector2D.scaleUp(Vector2D.add(clickedOnNucleotide.state.position, basePairedNucleotide.state.position), 0.5);
-          let conventionalDifference = Vector2D.subtract(clickedOnNucleotide.state.position, basePairedNucleotide.state.position);
-          if (clickedOnNucleotide.isGreaterIndexInBasePair(clickedOnNucleotide.state.basePair as Nucleotide.BasePair)) {
-            conventionalDifference = Vector2D.negate(conventionalDifference);
-          }
-          let asPolar = Vector2D.toPolar(conventionalDifference);
-          // Correct angle to adhere to convention (90-degree turn clockwise).
-          asPolar.angle -= Math.PI * 0.5;
-          let oneOverBasePairDistance = 1 / asPolar.radius;
-          let nucleotideTransformationData = this.props.affectedNucleotides.map((nucleotide : Nucleotide.Component) => {
-            let positionDifference = Vector2D.subtract(nucleotide.state.position, center);
-            let angle = Math.atan2(positionDifference.y, positionDifference.x);
-            return {
-              nucleotide,
-              additionalRotation : angle - asPolar.angle,
-              additionalRadiusScale : Vector2D.magnitude(positionDifference) * oneOverBasePairDistance
-            };
-          });
-          let angleForString = asPolar.angle;
-          if (app.state.useDegreesFlag) {
-            angleForString = Utils.radiansToDegrees(angleForString);
-          }
-          let scale = 1;
-          return {
-            app,
-            clickedOnNucleotide,
-            basePairedNucleotide,
-            nucleotideTransformationData,
-            centerX : center.x,
-            centerY : center.y,
-            angle : asPolar.angle,
-            radius : asPolar.radius,
-            scale,
-            centerXAsString : center.x.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-            centerYAsString : center.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-            angleAsString : angleForString.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-            scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
-          };
-        }
-
-        public override reset() {
-          let scale = this.state.scale;
-          let state = Object.assign(this.getInitialState(), {
-            scale,
-            scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
-          });
-          state.radius = Utils.areEqual(scale, 0) ? 0 : state.radius / scale;
-          this.setState(state);
-        }
-
         public override render() {
-          let nucleotide = this.state.clickedOnNucleotide;
-          let rnaComplex = this.state.app.state.rnaComplexes[nucleotide.props.rnaComplexIndex];
-          let rnaMolecule = rnaComplex.props.rnaMolecules[nucleotide.props.rnaMoleculeIndex];
-          let basePairedNucleotide = this.state.basePairedNucleotide;
-          let basePairedRnaMolecule = rnaComplex.props.rnaMolecules[basePairedNucleotide.props.rnaMoleculeIndex];
-          let getNewPositions = (centerX : number, centerY : number, radius : number, orientationAngle : number, scale : number) => {
-            return this.state.nucleotideTransformationData.map((nucleotideTransformationDatum : NucleotideTransformationData) => {
-              let angle = orientationAngle + nucleotideTransformationDatum.additionalRotation;
-              return Vector2D.add(new Vector2D(centerX, centerY), Vector2D.toCartesian(angle, radius * scale * nucleotideTransformationDatum.additionalRadiusScale));
-            });
-          };
-          let repositionNucleotides = (newPositions : Array<Vector2D>) => {
-            for (let i = 0; i < newPositions.length; i++) {
-              this.state.nucleotideTransformationData[i].nucleotide.setState({
-                position : newPositions[i]
-              });
-            }
-          };
-          let repositionNucleotidesAndBasePair = (newPositions : Array<Vector2D>) => {
-            repositionNucleotides(newPositions);
-            // The base pair jsx belongs to only one nucleotide, but checking which first would be inefficient.
-            let clickedOnNucleotidePosition = newPositions[this.props.indexOfClickedOnNucleotide];
-            let basePairedNucleotidePosition = newPositions[this.props.indexOfBasePairedNucleotide];
-            if (this.state.clickedOnNucleotide.state.basePairJsx !== undefined) {
-              this.state.clickedOnNucleotide.updateBasePairJsx(clickedOnNucleotidePosition, basePairedNucleotidePosition);
-            }
-            if (this.state.basePairedNucleotide.state.basePairJsx !== undefined) {
-              this.state.basePairedNucleotide.updateBasePairJsx(basePairedNucleotidePosition, clickedOnNucleotidePosition);
-            }
-          };
+          let boundingNucleotide0 = this.state.boundingNucleotide0;
+          let boundingNucleotide1 = this.state.boundingNucleotide1;
+          let rnaComplex = this.state.app.state.rnaComplexes[boundingNucleotide0.props.rnaComplexIndex];
+          let rnaMolecule = rnaComplex.props.rnaMolecules[boundingNucleotide0.props.rnaMoleculeIndex];
+          let basePairedRnaMolecule = rnaComplex.props.rnaMolecules[boundingNucleotide1.props.rnaMoleculeIndex];
           return <>
             <b>
               Edit single base pair:
             </b>
             <br/>
-            {`Nucleotide #${rnaMolecule.props.firstNucleotideIndex + nucleotide.props.nucleotideIndex} (${nucleotide.props.symbol})`}
+            {`Nucleotide #${rnaMolecule.props.firstNucleotideIndex + boundingNucleotide0.props.nucleotideIndex} (${boundingNucleotide0.props.symbol})`}
             <br/>
             {`In RNA molecule "${rnaMolecule.props.name}"`}
             <br/>
             {"Base-paried to:"}
             <br/>
-            {`Nucleotide #${basePairedRnaMolecule.props.firstNucleotideIndex + basePairedNucleotide.props.nucleotideIndex} (${basePairedNucleotide.props.symbol})`}
+            {`Nucleotide #${basePairedRnaMolecule.props.firstNucleotideIndex + boundingNucleotide1.props.nucleotideIndex} (${boundingNucleotide1.props.symbol})`}
             <br/>
             {`In RNA molecule "${basePairedRnaMolecule.props.name}"`}
             <br/>
             {`In RNA complex "${rnaComplex.props.name}"`}
             <br/>
-            {`Base-pair type: "${[(nucleotide.state.basePair as Nucleotide.BasePair).type]}"`}
+            {`Base-pair type: "${[(boundingNucleotide0.state.basePair as Nucleotide.BasePair).type]}"`}
             <br/>
-            <b>
-              Center position:
-            </b>
-            <br/>
-            <label>
-              x:&nbsp;
-              <input
-                type = "number"
-                step = {0.5}
-                value = {this.state.centerXAsString}
-                onChange = {event => {
-                  this.setState({
-                    centerXAsString : event.target.value
-                  });
-                  let newCenterX = Number.parseFloat(event.target.value);
-                  if (Number.isNaN(newCenterX)) {
-                    return;
-                  }
-                  this.setState({
-                    centerX : newCenterX
-                  });
-                  repositionNucleotides(getNewPositions(newCenterX, this.state.centerY, this.state.radius, this.state.angle, this.state.scale));
-                }}
-              />
-            </label>
-            <br/>
-            <label>
-              y:&nbsp;
-              <input
-                type = "number"
-                step = {0.5}
-                value = {this.state.centerYAsString}
-                onChange = {event => {
-                  this.setState({
-                    centerYAsString : event.target.value
-                  });
-                  let newCenterY = Number.parseFloat(event.target.value);
-                  if (Number.isNaN(newCenterY)) {
-                    return;
-                  }
-                  this.setState({
-                    centerY : newCenterY
-                  });
-                  repositionNucleotides(getNewPositions(this.state.centerX, newCenterY, this.state.radius, this.state.angle, this.state.scale));
-                }}
-              />
-            </label>
-            <br/>
-            <label>
-              θ:&nbsp;
-              <input
-                type = "number"
-                // 1 degree in radians === 0.01745329251
-                step = {this.state.app.state.useDegreesFlag ? 1 : 0.01745329251}
-                value = {this.state.angleAsString}
-                onChange = {event => {
-                  this.setState({
-                    angleAsString : event.target.value
-                  });
-                  let newAngle = Number.parseFloat(event.target.value);
-                  if (Number.isNaN(newAngle)) {
-                    return;
-                  }
-                  if (this.state.app.state.useDegreesFlag) {
-                    newAngle = Utils.degreesToRadians(newAngle);
-                  }
-                  this.setState({
-                    angle : newAngle
-                  });
-                  repositionNucleotidesAndBasePair(getNewPositions(this.state.centerX, this.state.centerY, this.state.radius, newAngle, this.state.scale));
-                }}
-              />
-            </label>
-            {this.state.app.state.useDegreesFlag ? "°" : "radians"}
-            <br/>
-            <label>
-              scale:&nbsp;
-              <input
-                type = "number"
-                step = {0.1}
-                value = {this.state.scaleAsString}
-                onChange = {event => {
-                  this.setState({
-                    scaleAsString : event.target.value
-                  });
-                  let newScale = Number.parseFloat(event.target.value);
-                  if (Number.isNaN(newScale)) {
-                    return;
-                  }
-                  this.setState({
-                    scale : newScale
-                  });
-                  repositionNucleotidesAndBasePair(getNewPositions(this.state.centerX, this.state.centerY, this.state.radius, this.state.angle, newScale));
-                }}
-              />
-            </label>
-            <br/>
-            <button
-              onClick = {() => {
-                let normalDirection = Vector2D.toNormalCartesian(this.state.angle);
-                let center = new Vector2D(this.state.centerX, this.state.centerY);
-                repositionNucleotidesAndBasePair(this.state.nucleotideTransformationData.map((nucleotideTransformationData : NucleotideTransformationData) => {
-                  let currentPosition = Vector2D.subtract(nucleotideTransformationData.nucleotide.state.position, center);
-                  let transformedPosition = Vector2D.add(currentPosition, Vector2D.scaleUp(Vector2D.projectUsingNormalDirection(currentPosition, normalDirection), -2));
-                  nucleotideTransformationData.additionalRotation = Vector2D.asAngle(transformedPosition) - this.state.angle;
-                  return Vector2D.add(center, transformedPosition);
-                }));
-              }}
-            >
-              Flip
-            </button>
+            {this.renderTransformationData()}
           </>;
+        }
+
+        public override getInitialState() : State {
+          return this.getInitialStateHelper();
         }
       }
     }
@@ -1362,7 +1413,7 @@ export namespace SelectionConstraint {
               <br/>
               {`In RNA complex "${rnaComplex.props.name}"`}
               <br/>
-              {`${this.props.affectedNucleotides.length - 2} free nucleotides between nucleotide #${fivePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} and nucleotide #${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex}, exclusive`}
+              {`${this.props.affectedNucleotides.length - 2} free nucleotides between nucleotide #${fivePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (exclusive) and nucleotide #${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (exclusive)`}
               <br/>
               <label>
                 Clockwise?&nbsp;
@@ -1432,6 +1483,84 @@ export namespace SelectionConstraint {
           }
         }
       }
+    }
+  }
+
+  namespace SingleHelix {
+    export namespace Edit {
+      type Props = PolarSelectionConstraintProps & {
+        indexOfBoundingNucleotide2 : number,
+        indexOfBoundingNucleotide3 : number
+      };
+  
+      type State = PolarSelectionConstraintState & {
+        boundingNucleotide2 : Nucleotide.Component,
+        boundingNucleotide3 : Nucleotide.Component
+      };
+
+      export class Component extends PolarSelectionConstraintComponent<Props, State> {
+        constructor(props : Props) {
+          super(props);
+        }
+
+        public override render() {
+          let boundingNucleotide0 = this.state.boundingNucleotide0;
+          let boundingNucleotide1 = this.state.boundingNucleotide1;
+          let boundingNucleotide2 = this.state.boundingNucleotide2;
+          let boundingNucleotide3 = this.state.boundingNucleotide3;
+          let rnaComplex = this.state.app.state.rnaComplexes[boundingNucleotide0.props.rnaComplexIndex];
+          let rnaMolecule0 = rnaComplex.props.rnaMolecules[boundingNucleotide0.props.rnaMoleculeIndex];
+          let rnaMolecule1 = rnaComplex.props.rnaMolecules[boundingNucleotide1.props.rnaMoleculeIndex];
+          let rnaMoleculesAndNucleotidesInfo : JSX.Element;
+          if (this.state.boundingNucleotide0.props.rnaMoleculeIndex === this.state.boundingNucleotide1.props.rnaMoleculeIndex) {
+            rnaMoleculesAndNucleotidesInfo = <>
+              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive)`}
+              <br/>
+              Contiguously bound to:
+              <br/>
+              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive)`}
+              <br/>
+              {`In RNA molecule "${rnaMolecule0.props.name}"`}
+              <br/>
+            </>;
+          } else {
+            rnaMoleculesAndNucleotidesInfo = <>
+              {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (inclusive)`}
+              <br/>
+              {`In RNA molecule "${rnaMolecule0.props.name}"`}
+              <br/>
+              Contiguously bound to:
+              <br/>
+              {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (inclusive)`}
+              <br/>
+              {`In RNA molecule "${rnaMolecule1.props.name}"`}
+              <br/>
+            </>;
+          }
+          return <>
+            <b>
+              Edit single helix:
+            </b>
+            <br/>
+            {rnaMoleculesAndNucleotidesInfo}
+            {`In RNA complex "${rnaComplex.props.name}"`}
+            <br/>
+            <b>
+            Center position:
+            </b>
+            <br/>
+            {this.renderTransformationData()}
+            <br/>
+          </>;
+        }
+
+        public override getInitialState() {
+          return Object.assign(this.getInitialStateHelper(), {
+            boundingNucleotide2 : this.props.affectedNucleotides[this.props.indexOfBoundingNucleotide2],
+            boundingNucleotide3 : this.props.affectedNucleotides[this.props.indexOfBoundingNucleotide3]
+          });
+        }
+      } 
     }
   }
 }
