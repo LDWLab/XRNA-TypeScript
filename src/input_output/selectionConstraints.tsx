@@ -917,6 +917,8 @@ export namespace SelectionConstraint {
       boundingNucleotide1 : Nucleotide.Component
     };
 
+    export const BOUNDING_NUCLEOTIDE_TO_ORIENTATION_ANGLE_FACTOR = Math.PI * -0.5;
+
     export abstract class Component<ExtendedProps extends Props, ExtendedState extends State> extends SelectionConstraintComponent<ExtendedProps, ExtendedState> {
       public override reset() {
         // Prevent state.<scale> from being re-defined.
@@ -941,7 +943,7 @@ export namespace SelectionConstraint {
         let asPolar = Vector2D.toPolar(conventionalDifference);
         asPolar.radius *= 0.5;
         // Correct angle to adhere to convention (90-degree turn clockwise).
-        asPolar.angle -= Math.PI * 0.5;
+        asPolar.angle += BOUNDING_NUCLEOTIDE_TO_ORIENTATION_ANGLE_FACTOR;
         let oneOverScale = 1 / asPolar.radius;
         let angleForString = asPolar.angle;
         if (app.state.useDegreesFlag) {
@@ -1102,11 +1104,12 @@ export namespace SelectionConstraint {
           <br/>
           <button
             onClick = {() => {
-              let normalDirection = Vector2D.toNormalCartesian(this.state.angle);
+              // Convert from the orientation angle to the difference between bounding nucleotides.
+              let axisDirection = Vector2D.toNormalCartesian(this.state.angle - BOUNDING_NUCLEOTIDE_TO_ORIENTATION_ANGLE_FACTOR);
               let origin = new Vector2D(this.state.originX, this.state.originY);
               this.repositionNucleotidesAndBasePairs(this.state.transformationData.map((nucleotideTransformationData : NucleotideTransformationData) => {
                 let currentPosition = Vector2D.subtract(nucleotideTransformationData.nucleotide.state.position, origin);
-                let transformedPosition = Vector2D.add(currentPosition, Vector2D.scaleUp(Vector2D.projectUsingNormalDirection(currentPosition, normalDirection), -2));
+                let transformedPosition = Vector2D.add(currentPosition, Vector2D.scaleUp(Vector2D.projectUsingNormalDirection(currentPosition, axisDirection), -2));
                 nucleotideTransformationData.additionalRotation = Vector2D.asAngle(transformedPosition) - this.state.angle;
                 return Vector2D.add(origin, transformedPosition);
               }));
