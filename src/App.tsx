@@ -613,7 +613,8 @@ export namespace App {
             });
           }}
           onWheel = {event => {
-            let newZoomExponent = this.state.zoomExponent + Utils.sign(event.deltaY);
+            // Apparently, the sign of <event.deltaY> needs to be negated in order to support intuitive scrolling..
+            let newZoomExponent = this.state.zoomExponent - Utils.sign(event.deltaY);
             let newZoom = Math.pow(ZOOM_BASE, newZoomExponent);
             this.setState({
               zoom : newZoom,
