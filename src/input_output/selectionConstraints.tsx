@@ -675,8 +675,13 @@ export namespace SelectionConstraint {
           clickedOnNucleotide,
           basePairedNucleotide
         ];
+        let indexOfBoundingNucleotide0 : number;
+        let indexOfBoundingNucleotide1 : number;
         let arrayIndexDelta = getBasePairedNucleotideArrayIndexDelta(rnaMolecule, basePairedRnaMolecule, basePairedRnaMoleculeIndex, clickedOnNucleotideArrayIndex, basePairedNucleotideArrayIndex);
-        if (arrayIndexDelta !== undefined) {
+        if (arrayIndexDelta === undefined) {
+          indexOfBoundingNucleotide0 = 0;
+          indexOfBoundingNucleotide1 = 1;
+        } else {
           appendDraggedNucleotides(rnaMolecule, basePairedRnaMolecule, basePairedRnaMoleculeIndex, clickedOnNucleotideArrayIndex, basePairedNucleotideArrayIndex, 1, arrayIndexDelta, draggedNucleotides);
           appendDraggedNucleotides(rnaMolecule, basePairedRnaMolecule, basePairedRnaMoleculeIndex, clickedOnNucleotideArrayIndex, basePairedNucleotideArrayIndex, -1, -arrayIndexDelta, draggedNucleotides);
           for (let i = 0; i < draggedNucleotides.length; i++) {
@@ -702,6 +707,8 @@ export namespace SelectionConstraint {
             }
             leastNucleotideIndexConsecutiveToTheMaximumNucleotideIndex = nucleotideIndex;
           }
+          indexOfBoundingNucleotide0 = 0;
+          indexOfBoundingNucleotide1 = draggedNucleotides.length - 1;
           let startingArrayIndex = rnaMolecule.findNucleotideByIndex(greatestNucleotideIndexConsecutiveToTheMinimumNucleotideIndex).arrayIndex + 1;
           let boundingArrayIndex = rnaMolecule.findNucleotideByIndex(leastNucleotideIndexConsecutiveToTheMaximumNucleotideIndex).arrayIndex;
           for (let arrayIndex = startingArrayIndex; arrayIndex < boundingArrayIndex; arrayIndex++) {
@@ -713,6 +720,16 @@ export namespace SelectionConstraint {
           case ReturnType.DragListener:
             return linearDrag(clickedOnNucleotide.state.position, draggedNucleotides);
           case ReturnType.EditJsxElement:
+            let ref = React.createRef<RnaSubdomain.Edit.Component>();
+            return {
+              ref,
+              content : <RnaSubdomain.Edit.Component
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+                indexOfBoundingNucleotide0 = {indexOfBoundingNucleotide0}
+                indexOfBoundingNucleotide1 = {indexOfBoundingNucleotide1}
+              />
+            };
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
@@ -1639,7 +1656,7 @@ export namespace SelectionConstraint {
               <br/>
               {`In RNA molecule "${rnaMolecule0.props.name}"`}
               <br/>
-              Contiguously bound to:
+              Bound to:
               <br/>
               {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
@@ -1656,7 +1673,6 @@ export namespace SelectionConstraint {
             {`In RNA complex "${rnaComplex.props.name}"`}
             <br/>
             {this.renderTransformationData()}
-            <br/>
           </>;
         }
       }
@@ -1664,35 +1680,48 @@ export namespace SelectionConstraint {
   }
 
   namespace RnaSubdomain {
-    type Props = PolarSelectionConstraint.Props;
+    export namespace Edit{
+      type Props = PolarSelectionConstraint.Props;
 
-    type State = PolarSelectionConstraint.State;
+      type State = PolarSelectionConstraint.State;
 
-    export class Component extends PolarSelectionConstraint.Component<Props, State> {
-      constructor(props : Props) {
-        super(props);
-      }
-
-      public override getInitialState() {
-        return this.getInitialStateHelper();
-      }
-
-      public override render() {
-        let fivePrimeNucleotide = this.state.boundingNucleotide0;
-        let threePrimeNucleotide = this.state.boundingNucleotide1;
-        if (fivePrimeNucleotide.isGreaterIndexInBasePair()) {
-          let tempNucleotide = fivePrimeNucleotide;
-          fivePrimeNucleotide = threePrimeNucleotide;
-          threePrimeNucleotide = tempNucleotide;
+      export class Component extends PolarSelectionConstraint.Component<Props, State> {
+        constructor(props : Props) {
+          super(props);
         }
-        return <>
-          <b>
-            Edit RNA subdomain:
-          </b>
-          5' Nucleotide
-          <br/>
-          <br/>
-        </>;
+
+        public override getInitialState() {
+          return this.getInitialStateHelper();
+        }
+
+        public override render() {
+          let fivePrimeNucleotide = this.state.boundingNucleotide0;
+          let threePrimeNucleotide = this.state.boundingNucleotide1;
+          if (fivePrimeNucleotide.isGreaterIndexInBasePair()) {
+            let tempNucleotide = fivePrimeNucleotide;
+            fivePrimeNucleotide = threePrimeNucleotide;
+            threePrimeNucleotide = tempNucleotide;
+          }
+          let rnaComplex = this.state.app.state.rnaComplexes[fivePrimeNucleotide.props.rnaComplexIndex];
+          let rnaMolecule = rnaComplex.props.rnaMolecules[fivePrimeNucleotide.props.rnaMoleculeIndex];
+          return <>
+            <b>
+              Edit RNA subdomain:
+            </b>
+            <br/>
+            {`5' Nucleotide: #${fivePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${fivePrimeNucleotide.props.symbol}, inclusive)`}
+            <br/>
+            Bound to:
+            <br/>
+            {`3' Nucleotide: ${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${threePrimeNucleotide.props.symbol}, inclusive)`}
+            <br/>
+            {`In RNA molecule "${rnaMolecule.props.name}"`}
+            <br/>
+            {`In RNA complex "${rnaComplex.props.name}"`}
+            <br/>
+            {this.renderTransformationData()}
+          </>;
+        }
       }
     }
   }
