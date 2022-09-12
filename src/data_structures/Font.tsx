@@ -1,3 +1,5 @@
+import React from "react";
+
 class PartialFont {
   public family : string;
   public style : string;
@@ -151,6 +153,92 @@ class Font extends PartialFont {
 
   public static override fromFontId(fontId : number, size : number = Font.DEFAULT_FONT_SIZE) {
     return Font.fromPartialFont(PartialFont.fromFontId(fontId), size);
+  }
+}
+
+export namespace FontEditor {
+  type Props = {
+    updateFontParentHelper : (newFont : Font) => void,
+    font : Font
+  };
+
+  type State = Font;
+
+  export class Component extends React.Component<Props, State> {
+    constructor(props : Props) {
+      super(props);
+      this.state = Object.assign({}, this.props.font);
+    }
+
+    public override render() {
+      let sizeInputType = typeof this.state.size === "string" && Number.isNaN(Number.parseFloat(this.state.size)) ? "text" : "number";
+      return <>
+        <b>
+          Font:
+        </b>
+        <br/>
+        <label>
+          Size:&nbsp;
+          <input
+            type = {sizeInputType}
+            value = {this.state.size}
+            min = {0}
+            onChange = {event => {
+              let updatedState = Object.assign(this.state, {
+                size : event.target.value
+              });
+              this.setState(updatedState);
+              this.props.updateFontParentHelper(updatedState);
+            }}
+          />
+        </label>
+        <br/>
+        <label>
+          Family:&nbsp;
+          <input
+            type = "text"
+            value = {this.state.family}
+            onChange = {event => {
+              let updatedState = Object.assign(this.state, {
+                family : event.target.value
+              });
+              this.setState(updatedState);
+              this.props.updateFontParentHelper(updatedState);
+            }}
+          />
+        </label>
+        <br/>
+        <label>
+          Style:&nbsp;
+          <input
+            type = "text"
+            value = {this.state.style}
+            onChange = {event => {
+              let updatedState = Object.assign(this.state, {
+                style : event.target.value
+              });
+              this.setState(updatedState);
+              this.props.updateFontParentHelper(updatedState);
+            }}
+          />
+        </label>
+        <br/>
+        <label>
+          Weight:&nbsp;
+          <input
+            type = "text"
+            value = {this.state.weight}
+            onChange = {event => {
+              let updatedState = Object.assign(this.state, {
+                weight : event.target.value
+              });
+              this.setState(updatedState);
+              this.props.updateFontParentHelper(updatedState);
+            }}
+          />
+        </label>
+      </>;
+    }
   }
 }
 

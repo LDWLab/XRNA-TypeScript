@@ -38,7 +38,7 @@ namespace Div {
     }
 
     public override componentDidMount() {
-      this.props.onResize(this.props.width, this.props.height);
+      this.props.onResize(this.props.width ?? 0, this.props.height ?? 0);
     }
 
     public override componentDidUpdate(prevProps : Props) {

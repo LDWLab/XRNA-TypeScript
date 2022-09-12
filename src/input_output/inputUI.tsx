@@ -7,6 +7,7 @@ import { RnaMolecule } from "../components/RnaMolecule";
 import Vector2D from "../data_structures/Vector2D";
 import xrnaHeader from "./xrnaHeader";
 import { RefObject } from "react";
+import { LabelContent } from "../components/LabelContent";
 
 type FileReaderOutput = {
   rnaComplexes : Array<RnaComplex.Component>,
@@ -414,7 +415,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                     throw new Error(`This <LabelList> label-content line has a content value with an unrecognized format: ${contentAsWrappedString}`);
                   }
                   nucleotideProps = Object.assign(nucleotideProps, {
-                    labelContent : {
+                    labelContentProps : {
                       position : new Vector2D(x, y),
                       content : contentMatch[1] as string,
                       stroke,
@@ -593,7 +594,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
             }
           });
           nucleotideProps = Object.assign(nucleotideProps, {
-            labelContent : {
+            labelContentProps : {
               position : Vector2D.subtract(new Vector2D(Number.parseFloat(label.labelContent.x), Number.parseFloat(label.labelContent.y)), nucleotideProps.position),
               content : label.labelContent.label,
               font,

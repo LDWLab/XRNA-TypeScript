@@ -4,6 +4,7 @@ import Font from "../data_structures/Font";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaComplex } from "../components/RnaComplex";
 import { RnaMolecule } from "../components/RnaMolecule";
+import { LabelContent } from "../components/LabelContent";
 
 interface XrnaFileWriter {
   (rnaComplexes : Array<RnaComplex.Component>) : string;
@@ -93,10 +94,11 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
           "text-" + nucleotide.state.stroke.toCSS(),
           fontCssClassName
         ];
-        if (nucleotide.state.labelContent !== undefined) {
-          handleFontCss(nucleotide.state.labelContent.font);
+        if (nucleotide.labelContentReference.current !== null) {
+          let labelContent = nucleotide.labelContentReference.current;
+          handleFontCss(labelContent.state.font);
           labelContentCssClasses[nucleotideIndex] = [
-            "text-" + nucleotide.state.labelContent.stroke.toCSS(),
+            "text-" + labelContent.state.stroke.toCSS(),
             fontCssClassName
           ];
         }
@@ -126,16 +128,17 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
           rnaMolecule.props.nucleotidesIndexMap.forEach((nucleotideData : RnaMolecule.ArrayEntry) => {
             let nucleotideIndex = nucleotideData.nucleotideIndex;
             let nucleotide = nucleotideData.nucleotideReference.current as Nucleotide.Component;
-            if (nucleotide.state.labelContent !== undefined || nucleotide.state.labelLine !== undefined) {
+            let labelContent = nucleotide.labelContentReference.current;
+            if (labelContent !== null || nucleotide.state.labelLine !== undefined) {
               let label : LabelForJson = {
                 residueIndex : nucleotideData.nucleotideIndex
               };
-              if (nucleotide.state.labelContent !== undefined) {
+              if (labelContent !== null) {
                 label.labelContent = {
                   classes : labelContentCssClasses[nucleotideIndex],
-                  label : nucleotide.state.labelContent.content,
-                  x : nucleotide.state.labelContent.position.x + nucleotide.state.position.x,
-                  y : nucleotide.state.labelContent.position.y + nucleotide.state.position.y
+                  label : labelContent.state.content,
+                  x : labelContent.state.position.x + nucleotide.state.position.x,
+                  y : labelContent.state.position.y + nucleotide.state.position.y
                 };
               }
               if (nucleotide.state.labelLine !== undefined) {

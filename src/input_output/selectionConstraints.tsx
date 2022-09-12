@@ -1,7 +1,8 @@
 import React from "react";
-import { App, DEFAULT_STROKE_WIDTH, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
+import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaMolecule } from "../components/RnaMolecule";
+import Font, { FontEditor } from "../data_structures/Font";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
 import { Circle, Geometry } from "../utils/Geometry";
 import { Utils } from "../utils/Utils";
@@ -740,9 +741,10 @@ export namespace SelectionConstraint {
     },
     [RNA_CYCLE] : new class extends SelectionConstraint {
       override calculateAndApproveSelection(_clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : string | App.DragListener | RightClickMenu {
+        if (returnType === ReturnType.DragListener) {
+          return `Cannot drag nucleotides using selection constraint "${RNA_CYCLE}"`; 
+        }
         switch (returnType) {
-          case ReturnType.DragListener:
-            return `Cannot drag nucleotides using selection constraint "${RNA_CYCLE}"`; 
           case ReturnType.EditJsxElement:
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
@@ -857,17 +859,8 @@ export namespace SelectionConstraint {
       }
     },
     [LABELS_ONLY] : new class extends SelectionConstraint {
-      override calculateAndApproveSelection(_clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : string | App.DragListener | RightClickMenu {
-        switch (returnType) {
-          case ReturnType.DragListener:
-            return `Cannot drag nucleotides using selection constraint "${LABELS_ONLY}"`;
-          case ReturnType.EditJsxElement:
-          case ReturnType.FormatJsxElement:
-          case ReturnType.AnnotateJsxElement:
-            return "Not yet implemented.";
-          default:
-            throw "Unrecognized ReturnType.";
-        }
+      override calculateAndApproveSelection(_clickedOnNucleotide : Nucleotide.Component, _returnType : ReturnType) : string | App.DragListener | RightClickMenu {
+        return `Cannot interact with nucleotides using selection constraint "${LABELS_ONLY}." Directly interact with label elements instead.`;
       }
     },
     [ENTIRE_SCENE] : new class extends SelectionConstraint {
@@ -1030,7 +1023,7 @@ export namespace SelectionConstraint {
             x:&nbsp;
             <input
               type = "number"
-              step = {0.5}
+              step = {DEFAULT_TRANSLATION_MAGNITUDE}
               value = {this.state.originXAsString}
               onChange = {event => {
                 this.setState({
@@ -1052,7 +1045,7 @@ export namespace SelectionConstraint {
             y:&nbsp;
             <input
               type = "number"
-              step = {0.5}
+              step = {DEFAULT_TRANSLATION_MAGNITUDE}
               value = {this.state.originYAsString}
               onChange = {event => {
                 this.setState({
@@ -1203,7 +1196,7 @@ export namespace SelectionConstraint {
               x:&nbsp;
               <input
                 type = "number"
-                step = {0.5}
+                step = {DEFAULT_TRANSLATION_MAGNITUDE}
                 value = {this.state.xAsString}
                 onChange = {event => {
                   nucleotide.state.position.x = Number.parseFloat(event.target.value);
@@ -1221,7 +1214,7 @@ export namespace SelectionConstraint {
               y:&nbsp;
               <input
                 type = "number"
-                step = {0.5}
+                step = {DEFAULT_TRANSLATION_MAGNITUDE}
                 value = {this.state.yAsString}
                 onChange = {event => {
                   nucleotide.state.position.y = Number.parseFloat(event.target.value);

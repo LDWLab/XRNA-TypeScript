@@ -17,6 +17,7 @@ export const CHARCOAL_GRAY_CSS = "rgb(54, 64, 79)";
 const ZOOM_BASE = 1.1;
 const ZOOM_STEP = Math.pow(10, -FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT);
 export const ONE_OVER_LOG_OF_ZOOM_BASE = 1 / Math.log(ZOOM_BASE);
+export const DEFAULT_TRANSLATION_MAGNITUDE = 0.5;
 const DEFAULT_RIGHT_CLICK_MENU_CONTENT = <>
   Right-click a nucleotide to display the selection-constraint details.
 </>
@@ -73,6 +74,12 @@ export namespace App {
     FORMAT = "Format",
     SETTINGS = "Settings"
   }
+
+  export enum MOUSE_BUTTON_INDICES {
+    LEFT = 0,
+    MIDDLE = 1,
+    RIGHT = 2
+  };
 
   export type TabData = {
     color : string,

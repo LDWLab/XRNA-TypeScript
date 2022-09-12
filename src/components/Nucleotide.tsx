@@ -4,6 +4,7 @@ import Color from "../data_structures/Color";
 import Font from "../data_structures/Font";
 import Vector2D from "../data_structures/Vector2D";
 import { SelectionConstraint } from "../input_output/selectionConstraints";
+import { LabelContent } from "./LabelContent";
 
 export namespace Nucleotide {
   export type Symbol = "A" | "C" | "G" | "U" | "5" | "3" | "5'" | "3'";
@@ -29,14 +30,6 @@ export namespace Nucleotide {
     stroke : Color
   };
 
-  export type LabelContent = {
-    position : Vector2D,
-    content : string,
-    font : Font,
-    stroke : Color,
-    graphicalAdjustment : Vector2D
-  };
-
   export type Props = {
     rnaComplexIndex : number,
     rnaMoleculeIndex : number,
@@ -47,7 +40,7 @@ export namespace Nucleotide {
     font? : Font | undefined,
     basePair? : BasePair | undefined,
     labelLine? : LabelLine | undefined,
-    labelContent? : LabelContent | undefined
+    labelContentProps? : LabelContent.PartialProps | undefined
   };
 
   type State = {
@@ -56,7 +49,6 @@ export namespace Nucleotide {
     font : Font,
     basePair : BasePair | undefined,
     labelLine : LabelLine | undefined,
-    labelContent : LabelContent | undefined,
     graphicalAdjustment : Vector2D,
     basePairJsx : JSX.Element | undefined,
     displayLabelLineEndpoint0MouseoverFlag : boolean,
@@ -64,10 +56,9 @@ export namespace Nucleotide {
     displayLabelLineCenterMouseoverFlag : boolean,
     displayLabelContentMouseoverFlag : boolean,
     displaySymbolMouseoverFlag : boolean,
-    labelContentBoundingBoxWidth : number,
-    labelContentBoundingBoxHeight : number,
     symbolBoundingBoxWidth : number,
-    symbolBoundingBoxHeight : number
+    symbolBoundingBoxHeight : number,
+    labelContentProps? : LabelContent.PartialProps | undefined
   };
 
   // Begin constants.
@@ -75,8 +66,8 @@ export namespace Nucleotide {
 
   export class Component extends React.Component<Props, State> {
     // Begin references.
-    private labelContent = createRef<SVGTextElement>();
-    private symbol = createRef<SVGTextElement>();
+    private symbolReference = createRef<SVGTextElement>();
+    public readonly labelContentReference = createRef<LabelContent.Component>();
 
     public constructor(props : Props) {
       super(props);
@@ -86,7 +77,6 @@ export namespace Nucleotide {
         font : props.font ?? Font.DEFAULT_FONT,
         basePair : props.basePair,
         labelLine : props.labelLine,
-        labelContent : props.labelContent,
         graphicalAdjustment : new Vector2D(0, 0),
         basePairJsx : undefined,
         displayLabelLineEndpoint0MouseoverFlag : false,
@@ -94,10 +84,9 @@ export namespace Nucleotide {
         displayLabelLineCenterMouseoverFlag : false,
         displayLabelContentMouseoverFlag : false,
         displaySymbolMouseoverFlag : false,
-        labelContentBoundingBoxWidth : 0,
-        labelContentBoundingBoxHeight : 0,
         symbolBoundingBoxWidth : 0,
-        symbolBoundingBoxHeight : 0
+        symbolBoundingBoxHeight : 0,
+        labelContentProps : props.labelContentProps
       });
     }
 
@@ -183,15 +172,7 @@ export namespace Nucleotide {
     }
 
     public override componentDidMount() {
-      if (this.state.labelContent !== undefined) {
-        let labelContentBoundingBox = (this.labelContent.current as SVGTextElement).getBBox();
-        this.state.labelContent.graphicalAdjustment = new Vector2D(labelContentBoundingBox.width * -0.5, labelContentBoundingBox.height * -0.25);
-        this.setState({
-          labelContentBoundingBoxWidth : labelContentBoundingBox.width,
-          labelContentBoundingBoxHeight : labelContentBoundingBox.height
-        });
-      }
-      let symbolBoundingBox = (this.symbol.current as SVGTextElement).getBBox();
+      let symbolBoundingBox = (this.symbolReference.current as SVGTextElement).getBBox();
       this.setState({
         graphicalAdjustment : new Vector2D(symbolBoundingBox.width * -0.5, symbolBoundingBox.height * -0.25),
         symbolBoundingBoxWidth : symbolBoundingBox.width,
@@ -204,72 +185,17 @@ export namespace Nucleotide {
     }
 
     public override render() {
-      let app = App.Component.getCurrent();
+      const app = App.Component.getCurrent();
       const optionalChildren : Array<JSX.Element> = new Array<JSX.Element>();
-      const labelContent = this.state.labelContent;
       const labelLine = this.state.labelLine;
-      if (labelContent) {
-        optionalChildren.push(<text
+      if (this.state.labelContentProps !== undefined) {
+        optionalChildren.push(<LabelContent.Component
           key = "labelContent"
-          ref = {this.labelContent}
-          fontSize = {labelContent.font.size}
-          fontFamily = {labelContent.font.family}
-          fontWeight = {labelContent.font.weight}
-          fontStyle = {labelContent.font.style}
-          fill = {labelContent.stroke.toCSS()}
-          transform = {`translate(${labelContent.position.x + labelContent.graphicalAdjustment.x} ${labelContent.position.y + labelContent.graphicalAdjustment.y}) scale(1 -1)`}
-        >
-          {labelContent.content}
-        </text>,
-        <rect
-          key = "labelContentBoundingBox"
-          fill = "none"
-          stroke = "red"
-          strokeWidth = {DEFAULT_STROKE_WIDTH}
-          visibility = {this.state.displayLabelContentMouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
-          transform = {`translate(${labelContent.position.x + labelContent.graphicalAdjustment.x} ${labelContent.position.y + labelContent.graphicalAdjustment.y})`}
-          width = {this.state.labelContentBoundingBoxWidth}
-          height = {this.state.labelContentBoundingBoxHeight}
-          pointerEvents = "all"
-          onMouseDown = {() => {
-            const nucleotide : Component = this;
-            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
-              isWindowDragListenerFlag : false,
-              initiateDrag() {
-                return labelContent.position;
-              },
-              drag (totalDrag : Vector2D) {
-                labelContent.position = totalDrag;
-                nucleotide.setState({
-                  // No other changes.
-                });
-              },
-              terminateDrag() {
-                // Do nothing.
-              },
-              affectedNucleotides : [nucleotide]
-            };
-            app.setState({
-              activeDragListener
-            })
-          }}
-          onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelContentMouseoverFlag : true,
-              });
-            }
-          }}
-          onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelContentMouseoverFlag : false
-              })
-            }
-          }}
+          nucleotide = {this}
+          {...Object.assign(this.state.labelContentProps)}
         />);
       }
-      if (labelLine) {
+      if (labelLine !== undefined) {
         optionalChildren.push(<line
           key = "labelLine"
           x1 = {labelLine.endpoint0.x}
@@ -420,7 +346,7 @@ export namespace Nucleotide {
               terminateDrag() {
                 // Do nothing.
               },
-              affectedNucleotides : []
+              affectedNucleotides : [nucleotide]
             };
             app.setState({
               activeDragListener
@@ -432,7 +358,7 @@ export namespace Nucleotide {
         transform = {`translate(${this.state.position.x} ${this.state.position.y})`}
       >
         <text
-          ref = {this.symbol}
+          ref = {this.symbolReference}
           style = {{
             fontSize : this.state.font.size,
             fontFamily : this.state.font.family,
@@ -456,8 +382,7 @@ export namespace Nucleotide {
           onMouseDown = {event => {
             let selectionConstraint = SelectionConstraint.selectionConstraints[app.state.selectionConstraint];
             switch (event.button) {
-              case 0 : {
-                // Left mouse button
+              case App.MOUSE_BUTTON_INDICES.LEFT : {
                 if (app.state.currentTab === App.Tab.EDIT) {
                   let dragAttempt = selectionConstraint.attemptDrag(this);
                   if (typeof dragAttempt === "string") {
@@ -474,12 +399,7 @@ export namespace Nucleotide {
                 }
                 break;
               }
-              case 1 : {
-                // Middle mouse button
-                break;
-              }
-              case 2 : {
-                // Right mouse button
+              case App.MOUSE_BUTTON_INDICES.RIGHT : {
                 let rightClickMenuOrErrorMessage : SelectionConstraint.RightClickMenu | string;
                 switch (app.state.currentTab) {
                   case App.Tab.ANNOTATE : {
@@ -557,8 +477,9 @@ export namespace Nucleotide {
         case "C_G":
         case "G_C":
           return BasePairType.CANONICAL;
+        default:
+          throw `Unsupported base-pair type between ${symbol0} and ${symbol1}`;
       }
-      throw `Unsupported base-pair type between ${symbol0} and ${symbol1}`;
     }
   }
 }
