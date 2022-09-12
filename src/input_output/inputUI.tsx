@@ -1,5 +1,5 @@
 import { DEFAULT_STROKE_WIDTH } from "../App";
-import Color from "../data_structures/Color";
+import Color, { BLACK, ColorFormat, fromCssString, fromHexadecimal } from "../data_structures/Color";
 import Font, { PartialFont } from "../data_structures/Font";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaComplex } from "../components/RnaComplex";
@@ -166,7 +166,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                 rnaMoleculeIndex,
                 type : basePairType,
                 strokeWidth : DEFAULT_STROKE_WIDTH,
-                stroke : Color.BLACK
+                stroke : BLACK
               }
             });
           } else {
@@ -176,7 +176,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                 rnaMoleculeIndex,
                 type : basePairType,
                 strokeWidth : DEFAULT_STROKE_WIDTH,
-                stroke : Color.BLACK
+                stroke : BLACK
               }
             });
           }
@@ -217,7 +217,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                 rnaMoleculeIndex,
                 type,
                 strokeWidth : DEFAULT_STROKE_WIDTH,
-                stroke : Color.BLACK
+                stroke : BLACK
               }
             });
             basePairNucleotideProps = Object.assign(basePairNucleotideProps, {
@@ -226,7 +226,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                 rnaMoleculeIndex,
                 type,
                 strokeWidth : DEFAULT_STROKE_WIDTH,
-                stroke : Color.BLACK
+                stroke : BLACK
               }
             });
           }
@@ -286,7 +286,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
           let colorAttribute = domElement.getAttribute("Color");
           let stroke : Color | null = null;
           if (colorAttribute !== null) {
-            stroke = Color.fromHexadecimal(colorAttribute, "rgb");
+            stroke = fromHexadecimal(colorAttribute, ColorFormat.RGB);
           }
           let fontIdAttribute = domElement.getAttribute("FontID");
           let partialFont : PartialFont | null = null;
@@ -378,7 +378,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                       endpoint0 : new Vector2D(x0, y0),
                       endpoint1 : new Vector2D(x1, y1),
                       strokeWidth,
-                      stroke : Color.fromHexadecimal(textContentLineData[6] as string, "rgb")
+                      stroke : fromHexadecimal(textContentLineData[6] as string, ColorFormat.RGB)
                     }
                   });
                   break;
@@ -397,7 +397,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                   let y = Number.parseFloat(yAsString);
                   let fontSize = Number.parseFloat(fontSizeAsString);
                   let fontId = Number.parseInt(fontIdAsString);
-                  let stroke = Color.fromHexadecimal(colorAsString, "rgb");
+                  let stroke = fromHexadecimal(colorAsString, ColorFormat.RGB);
                   let contentMatch = contentAsWrappedString.match(/^"(.*)"$/);
                   if (Number.isNaN(x)) {
                     throw new Error(`This <LabelList> label-content line has a non-numeric x value: ${xAsString}`);
@@ -455,14 +455,14 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
               nucleotideIndex : interpolatedBasePairNucleotideIndex,
               type,
               strokeWidth : DEFAULT_STROKE_WIDTH,
-              stroke : Color.BLACK
+              stroke : BLACK
             };
             basePairedNucleotideProps.basePair = {
               rnaMoleculeIndex : basePairsAcrossMolecules.rnaMoleculeIndex,
               nucleotideIndex : interpolatedNucleotideIndex,
               type,
               strokeWidth : DEFAULT_STROKE_WIDTH,
-              stroke : Color.BLACK
+              stroke : BLACK
             };
           }
         });
@@ -553,7 +553,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
             });
           } else if (className.startsWith("text-")) {
             nucleotideProps = Object.assign(nucleotideProps, {
-              stroke : Color.fromCssString(className.substring("text-".length))
+              stroke : fromCssString(className.substring("text-".length))
             });
           }
         });
@@ -565,7 +565,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
         let nucleotideProps : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(Number.parseInt(label.residueIndex) - rnaMolecule.state.firstNucleotideIndex).arrayEntry.nucleotideProps;
         if ("labelContent" in label) {
           let font = Font.DEFAULT_FONT;
-          let stroke = Color.BLACK;
+          let stroke = BLACK;
           (label.labelContent.classes as Array<any>).forEach(labelClassName => {
             let cssClass = cssClasses.find(cssClass => cssClass.name === labelClassName);
             if (cssClass !== undefined) {
@@ -590,7 +590,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
                 }
               });
             } else if (labelClassName.startsWith("text-")) {
-              stroke = Color.fromCssString(labelClassName.substring("text-".length));
+              stroke = fromCssString(labelClassName.substring("text-".length));
             }
           });
           nucleotideProps = Object.assign(nucleotideProps, {
@@ -605,7 +605,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
         }
         if ("labelLine" in label) {
           let labelLine = label.labelLine;
-          let stroke = Color.BLACK;
+          let stroke = BLACK;
           let strokeWidth = DEFAULT_STROKE_WIDTH;
           if (!("x1" in labelLine) || !("y1" in labelLine) || !("x2" in labelLine) || !("y2" in labelLine) || !("classes" in labelLine)) {
             throw "Input label-line elements should have \"x1\", \"y1\", \"x2\", \"y2\" and \"classes\" variables."
@@ -616,7 +616,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
               Object.entries(cssClass).forEach(cssClassData => {
                 switch (cssClassData[0]) {
                   case "stroke" : {
-                    stroke = Color.fromCssString(cssClassData[1] as string);
+                    stroke = fromCssString(cssClassData[1] as string);
                     break;
                   }
                   case "stroke-width" : {
@@ -664,7 +664,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
         let residueIndex2 = Number.parseInt(basePair.residueIndex2);
         let nucleotideProps2 : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(residueIndex2).arrayEntry.nucleotideProps;
         let strokeWidth = DEFAULT_STROKE_WIDTH;
-        let stroke = Color.BLACK;
+        let stroke = BLACK;
         (basePair.classes as Array<string>).forEach(className => {
           let cssClass = cssClasses.find(cssClass => cssClass.name === className);
           if (cssClass !== undefined) {
@@ -675,7 +675,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
                   break;
                 }
                 case "stroke" : {
-                  stroke = Color.fromCssString(cssClassData[1] as string);
+                  stroke = fromCssString(cssClassData[1] as string);
                   break;
                 }
               }

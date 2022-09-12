@@ -1,6 +1,6 @@
 import React, { createRef } from "react";
 import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
-import Color from "../data_structures/Color";
+import Color, { ColorEditor, ColorFormat, toCSS } from "../data_structures/Color";
 import Font, { FontEditor } from "../data_structures/Font";
 import Vector2D from "../data_structures/Vector2D";
 import { SelectionConstraint } from "../input_output/selectionConstraints";
@@ -52,7 +52,7 @@ export namespace LabelContent {
           fontFamily = {this.state.font.family}
           fontWeight = {this.state.font.weight}
           fontStyle = {this.state.font.style}
-          fill = {this.state.stroke.toCSS()}
+          fill = {toCSS(this.state.stroke)}
           transform = {`translate(${this.state.position.x + this.state.graphicalAdjustment.x} ${this.state.position.y + this.state.graphicalAdjustment.y}) scale(1 -1)`}
         >
           {this.state.content}
@@ -152,7 +152,6 @@ export namespace LabelContent {
     };
   
     type State = {
-      labelContent : LabelContent.Component,
       content : string,
       positionX : number,
       positionY : number,
@@ -169,7 +168,6 @@ export namespace LabelContent {
         let labelContent = this.props.labelContent;
         let position = labelContent.state.position;
         return {
-          labelContent,
           content : labelContent.state.content,
           positionX : position.x,
           positionY : position.y,
@@ -199,7 +197,7 @@ export namespace LabelContent {
                 this.setState({
                   content : event.target.value
                 });
-                this.state.labelContent.setState({
+                this.props.labelContent.setState({
                   content : event.target.value
                 })
               }}
@@ -226,7 +224,7 @@ export namespace LabelContent {
                 this.setState({
                   positionX : newPositionX
                 });
-                this.state.labelContent.state.position.x = newPositionX;
+                this.props.labelContent.state.position.x = newPositionX;
                 this.props.nucleotide.setState({
                   // No other changes.
                 });
@@ -251,7 +249,7 @@ export namespace LabelContent {
                 this.setState({
                   positionY : newPositionY
                 });
-                this.state.labelContent.state.position.y = newPositionY;
+                this.props.labelContent.state.position.y = newPositionY;
                 this.props.nucleotide.setState({
                   // No other changes.
                 });
@@ -261,21 +259,23 @@ export namespace LabelContent {
           </label>
           <br/>
           <FontEditor.Component
-            font = {this.state.labelContent.state.font}
+            font = {this.props.labelContent.state.font}
             updateFontParentHelper = {(newFont : Font) => {
               this.props.labelContent.setState({
                 font : newFont
               });
-              // this.props.nucleotide.setState({
-              //   // No other changes.
-              // });
-              // this.props.nucleotide.setState({
-              //   labelContent : Object.assign(labelContent, {
-              //     newFont
-              //   })
-              // });
-              // this.props.nucleotide.updateLabelContentBoundingBox();
             }}
+          />
+          <br/>
+          <ColorEditor.Component
+            color = {this.props.labelContent.state.stroke}
+            updateParentColorHelper = {(color : Color) => {
+              this.props.labelContent.setState({
+                stroke : color
+              });
+            }}
+            supportAlphaFlag = {false}
+            colorFormat = {ColorFormat.RGB}
           />
         </>
       }

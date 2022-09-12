@@ -2,6 +2,7 @@ import React from "react";
 import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaMolecule } from "../components/RnaMolecule";
+import { areEqual } from "../data_structures/Color";
 import Font, { FontEditor } from "../data_structures/Font";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
 import { Circle, Geometry } from "../utils/Geometry";
@@ -808,13 +809,12 @@ export namespace SelectionConstraint {
             let nucleotideData = rnaMolecules[rnaMoleculeIndex].props.nucleotidesIndexMap;
             for (let nucleotideArrayIndex = 0; nucleotideArrayIndex < nucleotideData.length; nucleotideArrayIndex++) {
               let nucleotide = nucleotideData[nucleotideArrayIndex].nucleotideReference.current as Nucleotide.Component;
-              if (nucleotide.state.stroke.equals(clickedOnNucleotide.state.stroke)) {
+              if (areEqual(nucleotide.state.stroke, clickedOnNucleotide.state.stroke)) {
                 let basePair = nucleotide.state.basePair;
-                if (basePair !== undefined && !(rnaComplex.props.rnaMolecules[basePair.rnaMoleculeIndex].props.nucleotidesIndexMap[basePair.nucleotideIndex].nucleotideReference.current as Nucleotide.Component).state.stroke.equals(clickedOnNucleotide.state.stroke)) {
+                if (basePair !== undefined && !areEqual((rnaComplex.props.rnaMolecules[basePair.rnaMoleculeIndex].findNucleotideByIndex(basePair.nucleotideIndex).arrayEntry.nucleotideReference.current as Nucleotide.Component).state.stroke, clickedOnNucleotide.state.stroke)) {
                   return `Cannot drag a set of same-color nucleotides which contain base pairs to nucleotides with different colors using selection constraint "${PER_COLOR}"`;
-                } else {
-                  draggedNucleotides.push(nucleotide);
                 }
+                draggedNucleotides.push(nucleotide);
               }
             }
           }

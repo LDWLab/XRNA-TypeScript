@@ -1,6 +1,6 @@
 import React, { createRef } from "react";
 import { App, DEFAULT_STROKE_WIDTH } from "../App";
-import Color from "../data_structures/Color";
+import Color, { BLACK, toCSS } from "../data_structures/Color";
 import Font from "../data_structures/Font";
 import Vector2D from "../data_structures/Vector2D";
 import { SelectionConstraint } from "../input_output/selectionConstraints";
@@ -73,7 +73,7 @@ export namespace Nucleotide {
       super(props);
       this.state = ({
         position : props.position,
-        stroke : props.stroke ?? Color.BLACK,
+        stroke : props.stroke ?? BLACK,
         font : props.font ?? Font.DEFAULT_FONT,
         basePair : props.basePair,
         labelLine : props.labelLine,
@@ -129,7 +129,7 @@ export namespace Nucleotide {
               y1 = {v0.y}
               x2 = {v1.x}
               y2 = {v1.y}
-              stroke = {this.state.basePair.stroke.toCSS()}
+              stroke = {toCSS(this.state.basePair.stroke)}
               strokeWidth = {this.state.basePair.strokeWidth}
               pointerEvents = "none"
             />
@@ -145,7 +145,7 @@ export namespace Nucleotide {
               cy = {center.y}
               r = {basePairCircleRadius}
               fill = "none"
-              stroke = {this.state.basePair.stroke.toCSS()}
+              stroke = {toCSS(this.state.basePair.stroke)}
               strokeWidth = {this.state.basePair.strokeWidth}
               pointerEvents = "none"
             />
@@ -160,7 +160,7 @@ export namespace Nucleotide {
               cx = {center.x}
               cy = {center.y}
               r = {basePairCircleRadius * 0.5}
-              fill = {this.state.basePair.stroke.toCSS()}
+              fill = {toCSS(this.state.basePair.stroke)}
               stroke = "none"
               strokeWidth = {this.state.basePair.strokeWidth}
               pointerEvents = "none"
@@ -202,7 +202,7 @@ export namespace Nucleotide {
           y1 = {labelLine.endpoint0.y}
           x2 = {labelLine.endpoint1.x}
           y2 = {labelLine.endpoint1.y}
-          stroke = {labelLine.stroke.toCSS()}
+          stroke = {toCSS(labelLine.stroke)}
           strokeWidth = {labelLine.strokeWidth}
         />,
         <circle
@@ -364,7 +364,7 @@ export namespace Nucleotide {
             fontFamily : this.state.font.family,
             fontWeight : this.state.font.weight,
             fontStyle : this.state.font.style,
-            fill : this.state.stroke.toCSS()
+            fill : toCSS(this.state.stroke)
           }}
           transform = {`translate(${this.state.graphicalAdjustment.x} ${this.state.graphicalAdjustment.y}) scale(1 -1)`}
         >

@@ -1,5 +1,5 @@
 import { stringify } from "querystring";
-import Color from "../data_structures/Color";
+import Color, { toCSS } from "../data_structures/Color";
 import Font from "../data_structures/Font";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaComplex } from "../components/RnaComplex";
@@ -76,7 +76,7 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
         };
         let strokeCssClassName : string = "";
         const handleStrokeCss = (stroke : {strokeWidth : number | string, stroke : Color}) => {
-          let strokeAsText = stroke.stroke.toCSS();
+          let strokeAsText = toCSS(stroke.stroke);
           let strokeCssClassIndex = strokeCssClasses.findIndex(cssClassForJson => cssClassForJson["stroke-width"] === `${stroke.strokeWidth}` && cssClassForJson.stroke === strokeAsText);
           if (strokeCssClassIndex === -1) {
             strokeCssClassName = `stroke#${strokeCssClasses.length}`;
@@ -91,14 +91,14 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
         };
         handleFontCss(nucleotide.state.font);
         nucleotideCssClasses[nucleotideIndex] = [
-          "text-" + nucleotide.state.stroke.toCSS(),
+          "text-" + toCSS(nucleotide.state.stroke),
           fontCssClassName
         ];
         if (nucleotide.labelContentReference.current !== null) {
           let labelContent = nucleotide.labelContentReference.current;
           handleFontCss(labelContent.state.font);
           labelContentCssClasses[nucleotideIndex] = [
-            "text-" + labelContent.state.stroke.toCSS(),
+            "text-" + toCSS(labelContent.state.stroke),
             fontCssClassName
           ];
         }
