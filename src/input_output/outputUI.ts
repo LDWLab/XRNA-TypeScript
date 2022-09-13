@@ -94,16 +94,17 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
           "text-" + toCSS(nucleotide.state.stroke),
           fontCssClassName
         ];
-        if (nucleotide.labelContentReference.current !== null) {
-          let labelContent = nucleotide.labelContentReference.current;
+        let labelContent = nucleotide.labelContentReference.current;
+        if (labelContent !== null) {
           handleFontCss(labelContent.state.font);
           labelContentCssClasses[nucleotideIndex] = [
             "text-" + toCSS(labelContent.state.stroke),
             fontCssClassName
           ];
         }
-        if (nucleotide.state.labelLine !== undefined) {
-          handleStrokeCss(nucleotide.state.labelLine);
+        let labelLine = nucleotide.labelLineReference.current;
+        if (labelLine !== null) {
+          handleStrokeCss(labelLine.state);
           labelLineCssClasses[nucleotideIndex] = [
             strokeCssClassName
           ];
@@ -129,7 +130,8 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
             let nucleotideIndex = nucleotideData.nucleotideIndex;
             let nucleotide = nucleotideData.nucleotideReference.current as Nucleotide.Component;
             let labelContent = nucleotide.labelContentReference.current;
-            if (labelContent !== null || nucleotide.state.labelLine !== undefined) {
+            let labelLine = nucleotide.labelLineReference.current;
+            if (labelContent !== null || labelLine !== null) {
               let label : LabelForJson = {
                 residueIndex : nucleotideData.nucleotideIndex
               };
@@ -141,13 +143,13 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
                   y : labelContent.state.position.y + nucleotide.state.position.y
                 };
               }
-              if (nucleotide.state.labelLine !== undefined) {
+              if (labelLine !== null) {
                 label.labelLine = {
                   classes : labelLineCssClasses[nucleotideIndex],
-                  x1 : nucleotide.state.labelLine.endpoint0.x + nucleotide.state.position.x,
-                  y1 : nucleotide.state.labelLine.endpoint0.y + nucleotide.state.position.y,
-                  x2 : nucleotide.state.labelLine.endpoint1.x + nucleotide.state.position.x,
-                  y2 : nucleotide.state.labelLine.endpoint1.y + nucleotide.state.position.y
+                  x1 : labelLine.state.endpoint0.x + nucleotide.state.position.x,
+                  y1 : labelLine.state.endpoint0.y + nucleotide.state.position.y,
+                  x2 : labelLine.state.endpoint1.x + nucleotide.state.position.x,
+                  y2 : labelLine.state.endpoint1.y + nucleotide.state.position.y
                 };
               }
               labels.push(label);

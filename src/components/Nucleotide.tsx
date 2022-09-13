@@ -5,6 +5,7 @@ import Font from "../data_structures/Font";
 import Vector2D from "../data_structures/Vector2D";
 import { SelectionConstraint } from "../input_output/selectionConstraints";
 import { LabelContent } from "./LabelContent";
+import { LabelLine } from "./LabelLine";
 
 export namespace Nucleotide {
   export type Symbol = "A" | "C" | "G" | "U" | "5" | "3" | "5'" | "3'";
@@ -23,13 +24,6 @@ export namespace Nucleotide {
     stroke : Color
   };
 
-  export type LabelLine = {
-    endpoint0 : Vector2D,
-    endpoint1 : Vector2D,
-    strokeWidth : number,
-    stroke : Color
-  };
-
   export type Props = {
     rnaComplexIndex : number,
     rnaMoleculeIndex : number,
@@ -39,7 +33,7 @@ export namespace Nucleotide {
     stroke? : Color | undefined,
     font? : Font | undefined,
     basePair? : BasePair | undefined,
-    labelLine? : LabelLine | undefined,
+    labelLineProps? : LabelLine.PartialProps | undefined,
     labelContentProps? : LabelContent.PartialProps | undefined
   };
 
@@ -48,26 +42,20 @@ export namespace Nucleotide {
     stroke : Color,
     font : Font,
     basePair : BasePair | undefined,
-    labelLine : LabelLine | undefined,
     graphicalAdjustment : Vector2D,
     basePairJsx : JSX.Element | undefined,
-    displayLabelLineEndpoint0MouseoverFlag : boolean,
-    displayLabelLineEndpoint1MouseoverFlag : boolean,
-    displayLabelLineCenterMouseoverFlag : boolean,
-    displayLabelContentMouseoverFlag : boolean,
     displaySymbolMouseoverFlag : boolean,
     symbolBoundingBoxWidth : number,
     symbolBoundingBoxHeight : number,
+    labelLineProps? : LabelLine.PartialProps | undefined,
     labelContentProps? : LabelContent.PartialProps | undefined
   };
-
-  // Begin constants.
-  const MOUSE_OVER_RADIUS = 1;
 
   export class Component extends React.Component<Props, State> {
     // Begin references.
     private symbolReference = createRef<SVGTextElement>();
     public readonly labelContentReference = createRef<LabelContent.Component>();
+    public readonly labelLineReference = createRef<LabelLine.Component>();
 
     public constructor(props : Props) {
       super(props);
@@ -76,16 +64,12 @@ export namespace Nucleotide {
         stroke : props.stroke ?? BLACK,
         font : props.font ?? Font.DEFAULT_FONT,
         basePair : props.basePair,
-        labelLine : props.labelLine,
         graphicalAdjustment : new Vector2D(0, 0),
         basePairJsx : undefined,
-        displayLabelLineEndpoint0MouseoverFlag : false,
-        displayLabelLineEndpoint1MouseoverFlag : false,
-        displayLabelLineCenterMouseoverFlag : false,
-        displayLabelContentMouseoverFlag : false,
         displaySymbolMouseoverFlag : false,
         symbolBoundingBoxWidth : 0,
         symbolBoundingBoxHeight : 0,
+        labelLineProps : props.labelLineProps,
         labelContentProps : props.labelContentProps
       });
     }
@@ -187,171 +171,22 @@ export namespace Nucleotide {
     public override render() {
       const app = App.Component.getCurrent();
       const optionalChildren : Array<JSX.Element> = new Array<JSX.Element>();
-      const labelLine = this.state.labelLine;
-      if (this.state.labelContentProps !== undefined) {
+      const labelContentProps = this.state.labelContentProps;
+      const labelLineProps = this.state.labelLineProps;
+      if (labelContentProps !== undefined) {
         optionalChildren.push(<LabelContent.Component
+          ref = {this.labelContentReference}
           key = "labelContent"
           nucleotide = {this}
-          {...Object.assign(this.state.labelContentProps)}
+          {...Object.assign(labelContentProps)}
         />);
       }
-      if (labelLine !== undefined) {
-        optionalChildren.push(<line
+      if (labelLineProps !== undefined) {
+        optionalChildren.push(<LabelLine.Component
+          ref = {this.labelLineReference}
           key = "labelLine"
-          x1 = {labelLine.endpoint0.x}
-          y1 = {labelLine.endpoint0.y}
-          x2 = {labelLine.endpoint1.x}
-          y2 = {labelLine.endpoint1.y}
-          stroke = {toCSS(labelLine.stroke)}
-          strokeWidth = {labelLine.strokeWidth}
-        />,
-        <circle
-          key = "draggableEndpoint0"
-          pointerEvents = "all"
-          stroke = "red"
-          strokeWidth = {DEFAULT_STROKE_WIDTH}
-          fill = "none"
-          cx = {labelLine.endpoint0.x}
-          cy = {labelLine.endpoint0.y}
-          r = {MOUSE_OVER_RADIUS}
-          visibility = {this.state.displayLabelLineEndpoint0MouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
-          onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelLineEndpoint0MouseoverFlag : true
-              });
-            }
-          }}
-          onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelLineEndpoint0MouseoverFlag : false
-              })
-            }
-          }}
-          onMouseDown = {() => {
-            let nucleotide : Component = this;
-            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
-              isWindowDragListenerFlag : false,
-              initiateDrag() {
-                return labelLine.endpoint0;
-              },
-              drag(totalDrag : Vector2D) {
-                labelLine.endpoint0 = totalDrag;
-                nucleotide.setState({
-                  // No other changes.
-                });
-              },
-              terminateDrag() {
-                // Do nothing.
-              },
-              affectedNucleotides : [nucleotide]
-            };
-            app.setState({
-              activeDragListener
-            });
-          }}
-        />,
-        <circle
-          key = "draggableEndpoint1"
-          pointerEvents = "all"
-          stroke = "red"
-          strokeWidth = {DEFAULT_STROKE_WIDTH}
-          fill = "none"
-          cx = {labelLine.endpoint1.x}
-          cy = {labelLine.endpoint1.y}
-          r = {MOUSE_OVER_RADIUS}
-          visibility = {this.state.displayLabelLineEndpoint1MouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
-          onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelLineEndpoint1MouseoverFlag : true
-              });
-            }
-          }}
-          onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelLineEndpoint1MouseoverFlag : false
-              });
-            }
-          }}
-          onMouseDown = {() => {
-            let nucleotide : Component = this;
-            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
-              isWindowDragListenerFlag : false,
-              initiateDrag() {
-                return labelLine.endpoint1;
-              },
-              drag(totalDrag : Vector2D) {
-                labelLine.endpoint1 = totalDrag;
-                nucleotide.setState({
-                  // No other changes.
-                });
-              },
-              terminateDrag() {
-                // Do nothing.
-              },
-              affectedNucleotides : [nucleotide]
-            };
-            app.setState({
-              activeDragListener
-            });
-          }}
-        />);
-        let difference = Vector2D.subtract(labelLine.endpoint1, labelLine.endpoint0);
-        let scaledOrthogonal = Vector2D.scaleUp(Vector2D.orthogonalize(difference), MOUSE_OVER_RADIUS / Vector2D.magnitude(difference));
-        let endpoint0TranslatedPositively = Vector2D.add(labelLine.endpoint0, scaledOrthogonal);
-        let endpoint0TranslatedNegatively = Vector2D.subtract(labelLine.endpoint0, scaledOrthogonal);
-        let endpoint1TranslatedPositively = Vector2D.add(labelLine.endpoint1, scaledOrthogonal);
-        let endpoint1TranslatedNegatively = Vector2D.subtract(labelLine.endpoint1, scaledOrthogonal);
-        let endpointPositionDifference : Vector2D;
-        optionalChildren.push(<path
-          key = "draggableBody"
-          pointerEvents = "all"
-          stroke = "red"
-          strokeWidth = {DEFAULT_STROKE_WIDTH}
-          fill = "none"
-          d = {`M ${endpoint0TranslatedPositively.x} ${endpoint0TranslatedPositively.y} A ${MOUSE_OVER_RADIUS} ${MOUSE_OVER_RADIUS} 0 0 0 ${endpoint0TranslatedNegatively.x} ${endpoint0TranslatedNegatively.y} L ${endpoint1TranslatedNegatively.x} ${endpoint1TranslatedNegatively.y} A ${MOUSE_OVER_RADIUS} ${MOUSE_OVER_RADIUS} 0 0 0 ${endpoint1TranslatedPositively.x} ${endpoint1TranslatedPositively.y} z`}
-          visibility = {this.state.displayLabelLineCenterMouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
-          onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelLineCenterMouseoverFlag : true
-              });
-            }
-          }}
-          onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
-              this.setState({
-                displayLabelLineCenterMouseoverFlag : false
-              });
-            }
-          }}
-          onMouseDown = {() => {
-            let nucleotide : Component = this;
-            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
-              isWindowDragListenerFlag : false,
-              initiateDrag() {
-                endpointPositionDifference = Vector2D.subtract(labelLine.endpoint1, labelLine.endpoint0);
-                return labelLine.endpoint0;
-              },
-              drag(totalDrag : Vector2D) {
-                labelLine.endpoint0 = totalDrag;
-                labelLine.endpoint1 = Vector2D.add(totalDrag, endpointPositionDifference);
-                nucleotide.setState({
-                  // No other changes.
-                });
-              },
-              terminateDrag() {
-                // Do nothing.
-              },
-              affectedNucleotides : [nucleotide]
-            };
-            app.setState({
-              activeDragListener
-            });
-          }}
+          nucleotide = {this}
+          {...Object.assign(labelLineProps)}
         />);
       }
       return <g

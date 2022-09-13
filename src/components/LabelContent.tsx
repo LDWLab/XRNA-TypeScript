@@ -12,7 +12,7 @@ export namespace LabelContent {
     content : string,
     font : Font,
     stroke : Color,
-    graphicalAdjustment : Vector2D,
+    graphicalAdjustment : Vector2D
   };
 
   export type Props = PartialProps & {
@@ -181,7 +181,7 @@ export namespace LabelContent {
         let rnaMolecule = rnaComplex.props.rnaMolecules[this.props.nucleotide.props.rnaMoleculeIndex];
         return <>
           <b>
-            {`Edit label for Nucleotide #${this.props.nucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex}`}
+            {`Edit label text for Nucleotide #${this.props.nucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex}`}
           </b>
           <br/>
           {`In RNA molecule "${rnaMolecule.props.name}"`}
@@ -213,6 +213,7 @@ export namespace LabelContent {
             <input
               type = "number"
               value = {this.state.positionXAsString}
+              step = {DEFAULT_TRANSLATION_MAGNITUDE}
               onChange = {event => {
                 this.setState({
                   positionXAsString : event.target.value
@@ -225,11 +226,10 @@ export namespace LabelContent {
                   positionX : newPositionX
                 });
                 this.props.labelContent.state.position.x = newPositionX;
-                this.props.nucleotide.setState({
+                this.props.labelContent.setState({
                   // No other changes.
                 });
               }}
-              step = {DEFAULT_TRANSLATION_MAGNITUDE}
             />
           </label>
           <br/>
@@ -238,6 +238,7 @@ export namespace LabelContent {
             <input
               type = "number"
               value = {this.state.positionYAsString}
+              step = {DEFAULT_TRANSLATION_MAGNITUDE}
               onChange = {event => {
                 this.setState({
                   positionYAsString : event.target.value
@@ -250,11 +251,10 @@ export namespace LabelContent {
                   positionY : newPositionY
                 });
                 this.props.labelContent.state.position.y = newPositionY;
-                this.props.nucleotide.setState({
+                this.props.labelContent.setState({
                   // No other changes.
                 });
               }}
-              step = {DEFAULT_TRANSLATION_MAGNITUDE}
             />
           </label>
           <br/>

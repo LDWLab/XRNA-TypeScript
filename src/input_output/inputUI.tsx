@@ -374,7 +374,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                     throw new Error(`This <LabelList> label-line line has a non-numeric strokeWidth value: ${strokeWidthAsString}`)
                   }
                   nucleotideProps = Object.assign(nucleotideProps, {
-                    labelLine : {
+                    labelLineProps : {
                       endpoint0 : new Vector2D(x0, y0),
                       endpoint1 : new Vector2D(x1, y1),
                       strokeWidth,
@@ -628,11 +628,11 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
             }
           });
           nucleotideProps = Object.assign(nucleotideProps, {
-            labelLine : {
+            labelLineProps : {
               endpoint0 : Vector2D.subtract(new Vector2D(Number.parseFloat(labelLine.x1), Number.parseFloat(labelLine.y1)), nucleotideProps.position),
               endpoint1 : Vector2D.subtract(new Vector2D(Number.parseFloat(labelLine.x2), Number.parseFloat(labelLine.y2)), nucleotideProps.position),
-              strokeWidth,
-              stroke
+              stroke,
+              strokeWidth
             }
           });
         }

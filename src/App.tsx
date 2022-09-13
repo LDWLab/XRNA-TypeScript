@@ -483,6 +483,7 @@ export namespace App {
                 <input
                   type = "number"
                   value = {this.state.viewXAsString}
+                  step = {DEFAULT_TRANSLATION_MAGNITUDE}
                   onChange = {(event) => {
                     let newViewX = Number.parseFloat(event.target.value);
                     if (!Number.isNaN(newViewX)) {
@@ -501,6 +502,7 @@ export namespace App {
                 <input
                   type = "number"
                   value = {this.state.viewYAsString}
+                  step = {DEFAULT_TRANSLATION_MAGNITUDE}
                   onChange = {(event) => {
                     let newViewY = Number.parseFloat(event.target.value);
                     if (!Number.isNaN(newViewY)) {

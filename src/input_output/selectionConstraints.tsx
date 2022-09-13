@@ -2,6 +2,7 @@ import React from "react";
 import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaMolecule } from "../components/RnaMolecule";
+import { AngleEditor } from "../data_structures/AngleEditor";
 import { areEqual } from "../data_structures/Color";
 import Font, { FontEditor } from "../data_structures/Font";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
@@ -921,7 +922,6 @@ export namespace SelectionConstraint {
       scale : number,
       originXAsString : string,
       originYAsString : string,
-      angleAsString : string,
       scaleAsString : string,
       boundingNucleotide0 : Nucleotide.Component,
       boundingNucleotide1 : Nucleotide.Component
@@ -955,10 +955,6 @@ export namespace SelectionConstraint {
         // Correct angle to adhere to convention (90-degree turn clockwise).
         asPolar.angle += BOUNDING_NUCLEOTIDE_TO_ORIENTATION_ANGLE_FACTOR;
         let oneOverScale = 1 / asPolar.radius;
-        let angleForString = asPolar.angle;
-        if (app.state.useDegreesFlag) {
-          angleForString = Utils.radiansToDegrees(angleForString);
-        }
         let scale = 1;
         return Object.assign(asPolar, {
           app,
@@ -976,7 +972,6 @@ export namespace SelectionConstraint {
           originY : origin.y,
           originXAsString : origin.x.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
           originYAsString : origin.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-          angleAsString : angleForString.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
           scale,
           scaleAsString : scale.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
         });
@@ -1063,31 +1058,16 @@ export namespace SelectionConstraint {
             />
           </label>
           <br/>
-          <label>
-            θ:&nbsp;
-            <input
-              type = "number"
-              // 1 degree === 0.01745329251 radians
-              step = {this.state.app.state.useDegreesFlag ? 1 : 0.01745329251}
-              value = {this.state.angleAsString}
-              onChange = {event => {
-                this.setState({
-                  angleAsString : event.target.value
-                });
-                let newAngle = Number.parseFloat(event.target.value);
-                if (Number.isNaN(newAngle)) {
-                  return;
-                }
-                if (this.state.app.state.useDegreesFlag) {
-                  newAngle = Utils.degreesToRadians(newAngle);
-                }
-                this.setState({
-                  angle : newAngle
-                });
-                this.repositionNucleotidesAndBasePairs(this.getNewPositions(this.state.originX, this.state.originY, this.state.radius, newAngle, this.state.scale));
-              }}
-            />
-          </label>
+          <AngleEditor.Component
+            app = {this.state.app}
+            angle = {this.state.angle}
+            updateParentAngleHelper = {(angle : number) => {
+              this.repositionNucleotidesAndBasePairs(this.getNewPositions(this.state.originX, this.state.originY, this.state.radius, angle, this.state.scale));
+              this.setState({
+                angle
+              });
+            }}
+          />
           {this.state.app.state.useDegreesFlag ? "°" : "radians"}
           <br/>
           <label>
@@ -1327,6 +1307,7 @@ export namespace SelectionConstraint {
                 <input
                   type = "number"
                   value = {this.state.terminalNucleotidePositionXAsString}
+                  step = {DEFAULT_TRANSLATION_MAGNITUDE}
                   onChange = {event => {
                     this.setState({
                       terminalNucleotidePositionXAsString : event.target.value
@@ -1347,6 +1328,7 @@ export namespace SelectionConstraint {
                 <input
                   type = "number"
                   value = {this.state.terminalNucleotidePositionYAsString}
+                  step = {DEFAULT_TRANSLATION_MAGNITUDE}
                   onChange = {event => {
                     this.setState({
                       terminalNucleotidePositionYAsString : event.target.value
@@ -1477,6 +1459,7 @@ export namespace SelectionConstraint {
                 <input
                   type = "number"
                   value = {this.state.signedDisplacementAsString}
+                  step = {DEFAULT_TRANSLATION_MAGNITUDE}
                   onChange = {event => {
                     this.setState({
                       signedDisplacementAsString : event.target.value
