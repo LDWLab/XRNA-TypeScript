@@ -274,7 +274,7 @@ export namespace Nucleotide {
               });
               let rnaMolecule = app.state.rnaComplexes[this.props.rnaComplexIndex].props.rnaMolecules[this.props.rnaMoleculeIndex];
               currentAppComponent.setState({
-                mouseOverText : `Nucleotide #${this.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${this.props.symbol}) in RNA molecule \"${rnaMolecule.props.name}\"`
+                mouseOverText : `Nucleotide #${this.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${this.props.symbol}) in RNA molecule \"${rnaMolecule.state.name}\"`
               });
             }
           }}

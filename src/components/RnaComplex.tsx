@@ -8,20 +8,20 @@ export namespace RnaComplex {
   };
 
   type State = {
-    // No properties.
+    name : string
   };
 
   export class Component extends React.Component<Props, State> {
     public constructor(props : Props) {
       super(props);
       this.state = {
-        // No properties.
+        name : props.name
       };
     }
 
     public override render() : JSX.Element {
       return <g
-        key = {this.props.name}
+        key = {this.state.name}
       >
         {this.props.rnaMolecules.map((rnaMolecule : RnaMolecule.Component, rnaMoleculeIndex : number) => <RnaMolecule.Component
           key = {rnaMoleculeIndex}

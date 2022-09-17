@@ -122,7 +122,7 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
     classes : fontCssClasses.concat(strokeCssClasses),
     rnaComplexes : rnaComplexes.map(rnaComplex => {
       return {
-        name : rnaComplex.props.name,
+        name : rnaComplex.state.name,
         rnaMolecules : rnaComplex.props.rnaMolecules.map((rnaMolecule : RnaMolecule.Component) => {
           let basePairs = new Array<BasePairForJson>();
           let labels = new Array<LabelForJson>();
@@ -183,7 +183,7 @@ const jsonFileWriter : XrnaFileWriter = (rnaComplexes : Array<RnaComplex.Compone
             }
           });
           return {
-            name : rnaMolecule.props.name,
+            name : rnaMolecule.state.name,
             basePairs,
             labels,
             sequence : rnaMolecule.props.nucleotidesIndexMap.map((nucleotideData : RnaMolecule.ArrayEntry) => {

@@ -1,11 +1,10 @@
 import React from "react";
-import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
+import { App, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
 import { Nucleotide } from "../components/Nucleotide";
 import { RnaMolecule } from "../components/RnaMolecule";
 import { AngleEditor } from "../data_structures/AngleEditor";
 import { areEqual } from "../data_structures/Color";
-import Font, { FontEditor } from "../data_structures/Font";
-import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
+import Vector2D from "../data_structures/Vector2D";
 import { Circle, Geometry } from "../utils/Geometry";
 import { Utils } from "../utils/Utils";
 
@@ -16,6 +15,13 @@ export namespace SelectionConstraint {
     FormatJsxElement,
     AnnotateJsxElement
   }
+
+  const interactionVerbsMap : Record<ReturnType, string> = {
+    [ReturnType.DragListener] : "drag",
+    [ReturnType.AnnotateJsxElement] : "annotate",
+    [ReturnType.EditJsxElement] : "edit",
+    [ReturnType.FormatJsxElement] : "format"
+  };
 
   export abstract class SelectionConstraint {
     abstract calculateAndApproveSelection(clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : App.DragListener | string | RightClickMenu;
@@ -772,6 +778,38 @@ export namespace SelectionConstraint {
           case ReturnType.DragListener:
             return linearDrag(clickedOnNucleotide.state.position, draggedNucleotides);
           case ReturnType.EditJsxElement:
+            let indexOfBoundingNucleotide0 = 0;
+            let indexOfBoundingNucleotide1 = 1;
+            let app = App.Component.getCurrent();
+            let rnaMolecules = app.state.rnaComplexes[draggedNucleotides[0].props.rnaComplexIndex].props.rnaMolecules;
+            let indexOfNucleotide = 0;
+            outer: for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < rnaMolecules.length; rnaMoleculeIndex++) {
+              let rnaMolecule = rnaMolecules[rnaMoleculeIndex];
+              let nucleotidesIndexMap = rnaMolecule.props.nucleotidesIndexMap;
+              for (let arrayIndex = 0; arrayIndex < nucleotidesIndexMap.length; arrayIndex++) {
+                let nucleotide = nucleotidesIndexMap[arrayIndex].nucleotideReference.current as Nucleotide.Component;
+                let basePair = nucleotide.props.basePair;
+                if (basePair !== undefined) {
+                  let basePairedNucleotide = rnaMolecules[basePair.rnaMoleculeIndex].findNucleotideByIndex(basePair.nucleotideIndex).arrayEntry.nucleotideReference.current as Nucleotide.Component;
+                  indexOfBoundingNucleotide0 = indexOfNucleotide;
+                  indexOfBoundingNucleotide1 = draggedNucleotides.findIndex((draggedNucleotide : Nucleotide.Component) => {
+                    return draggedNucleotide === basePairedNucleotide;
+                  });
+                  break outer;
+                }
+                indexOfNucleotide++;
+              }
+            }
+            let ref = React.createRef<_RnaMolecule.Edit.Component>();
+            return {
+              ref,
+              content : <_RnaMolecule.Edit.Component
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+              indexOfBoundingNucleotide0 = {indexOfBoundingNucleotide0}
+              indexOfBoundingNucleotide1 = {indexOfBoundingNucleotide1}
+              />
+            }
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
@@ -783,14 +821,49 @@ export namespace SelectionConstraint {
     [RNA_COMPLEX] : new class extends SelectionConstraint {
       override calculateAndApproveSelection(clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : string | App.DragListener | RightClickMenu {
         let draggedNucleotides = new Array<Nucleotide.Component>();
-        App.Component.getCurrent().state.rnaComplexes[clickedOnNucleotide.props.rnaComplexIndex].props.rnaMolecules.forEach((rnaMolecule : RnaMolecule.Component) => rnaMolecule.props.nucleotidesIndexMap.forEach((arrayEntry : RnaMolecule.ArrayEntry) => {
+        let app = App.Component.getCurrent();
+        app.state.rnaComplexes[clickedOnNucleotide.props.rnaComplexIndex].props.rnaMolecules.forEach((rnaMolecule : RnaMolecule.Component) => rnaMolecule.props.nucleotidesIndexMap.forEach((arrayEntry : RnaMolecule.ArrayEntry) => {
           let nucleotide = arrayEntry.nucleotideReference.current as Nucleotide.Component;
           draggedNucleotides.push(nucleotide);
         }));
+        // By default, use the first and last nucleotides as bounding nucleotides.
+        let indexOfBoundingNucleotide0 = 0;
+        let indexOfBoundingNucleotide1 = draggedNucleotides.length - 1;
+        let rnaComplexes = app.state.rnaComplexes;
+        let indexOfNucleotide = 0;
+        outer: for (let rnaComplexIndex = 0; rnaComplexIndex < rnaComplexes.length; rnaComplexIndex++) {
+          let rnaComplex = rnaComplexes[rnaComplexIndex];
+          let rnaMolecules = rnaComplex.props.rnaMolecules;
+          for (let rnaMoleculeIndex = 0; rnaMoleculeIndex < rnaMolecules.length; rnaMoleculeIndex++) {
+            let rnaMolecule = rnaMolecules[rnaMoleculeIndex];
+            let nucleotidesIndexMap = rnaMolecule.props.nucleotidesIndexMap;
+            for (let arrayIndex = 0; arrayIndex < nucleotidesIndexMap.length; arrayIndex++) {
+              let nucleotide = nucleotidesIndexMap[arrayIndex].nucleotideReference.current as Nucleotide.Component;
+              let basePair = nucleotide.state.basePair;
+              if (basePair !== undefined) {
+                let basePairedNucleotide = rnaMolecules[basePair.rnaMoleculeIndex].findNucleotideByIndex(basePair.nucleotideIndex).arrayEntry.nucleotideReference.current as Nucleotide.Component;
+                indexOfBoundingNucleotide0 = indexOfNucleotide;
+                indexOfBoundingNucleotide1 = draggedNucleotides.findIndex((draggedNucleotide : Nucleotide.Component) => draggedNucleotide === basePairedNucleotide);
+                break outer;
+              }
+              indexOfNucleotide++;
+            }
+          }
+        }
         switch (returnType) {
           case ReturnType.DragListener:
             return linearDrag(clickedOnNucleotide.state.position, draggedNucleotides);
           case ReturnType.EditJsxElement:
+            let ref = React.createRef<_RnaComplex.Edit.Component>();
+            return {
+              ref,
+              content : <_RnaComplex.Edit.Component
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+                indexOfBoundingNucleotide0 = {indexOfBoundingNucleotide0}
+                indexOfBoundingNucleotide1 = {indexOfBoundingNucleotide1}
+              />
+            }
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
@@ -813,7 +886,7 @@ export namespace SelectionConstraint {
               if (areEqual(nucleotide.state.stroke, clickedOnNucleotide.state.stroke)) {
                 let basePair = nucleotide.state.basePair;
                 if (basePair !== undefined && !areEqual((rnaComplex.props.rnaMolecules[basePair.rnaMoleculeIndex].findNucleotideByIndex(basePair.nucleotideIndex).arrayEntry.nucleotideReference.current as Nucleotide.Component).state.stroke, clickedOnNucleotide.state.stroke)) {
-                  return `Cannot drag a set of same-color nucleotides which contain base pairs to nucleotides with different colors using selection constraint "${PER_COLOR}"`;
+                  return `Cannot ${interactionVerbsMap[returnType]} a set of same-color nucleotides which contain base pairs to nucleotides with different colors using selection constraint "${PER_COLOR}"`;
                 }
                 draggedNucleotides.push(nucleotide);
               }
@@ -824,6 +897,15 @@ export namespace SelectionConstraint {
           case ReturnType.DragListener:
             return linearDrag(clickedOnNucleotide.state.position, draggedNucleotides);
           case ReturnType.EditJsxElement:
+            let ref = React.createRef<PerColor.Edit.Component>();
+            return {
+              ref,
+              content : <PerColor.Edit.Component
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+                indexOfClickedOnNucleotide = {draggedNucleotides.findIndex((draggedNucleotide : Nucleotide.Component) => draggedNucleotide === clickedOnNucleotide)}
+              />
+            };
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
@@ -978,9 +1060,10 @@ export namespace SelectionConstraint {
       }
   
       protected getNewPositions(centerX : number, centerY : number, radius : number, orientationAngle : number, scale : number) {
+        let origin = new Vector2D(centerX, centerY);
+        let radiusTimesScale = radius * scale;
         return this.state.transformationData.map((nucleotideTransformationDatum : NucleotideTransformationData) => {
-          let angle = orientationAngle + nucleotideTransformationDatum.additionalRotation;
-          return Vector2D.add(new Vector2D(centerX, centerY), Vector2D.toCartesian(angle, radius * scale * nucleotideTransformationDatum.additionalRadiusScale));
+          return Vector2D.add(origin, Vector2D.toCartesian(orientationAngle + nucleotideTransformationDatum.additionalRotation, radiusTimesScale * nucleotideTransformationDatum.additionalRadiusScale));
         });
       }
   
@@ -1167,9 +1250,9 @@ export namespace SelectionConstraint {
             <br/>
             {`Nucleotide #${nucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${nucleotide.props.symbol})`}
             <br/>
-            {`In RNA molecule "${rnaMolecule.props.name}"`}
+            {`In RNA molecule "${rnaMolecule.state.name}"`}
             <br/>
-            {`In RNA complex "${rnaComplex.props.name}"`}
+            {`In RNA complex "${rnaComplex.state.name}"`}
             <br/>
             {distanceJsxElements}
             <label>
@@ -1238,15 +1321,15 @@ export namespace SelectionConstraint {
             <br/>
             {`Nucleotide #${rnaMolecule.props.firstNucleotideIndex + boundingNucleotide0.props.nucleotideIndex} (${boundingNucleotide0.props.symbol})`}
             <br/>
-            {`In RNA molecule "${rnaMolecule.props.name}"`}
+            {`In RNA molecule "${rnaMolecule.state.name}"`}
             <br/>
             {"Base-paried to:"}
             <br/>
             {`Nucleotide #${basePairedRnaMolecule.props.firstNucleotideIndex + boundingNucleotide1.props.nucleotideIndex} (${boundingNucleotide1.props.symbol})`}
             <br/>
-            {`In RNA molecule "${basePairedRnaMolecule.props.name}"`}
+            {`In RNA molecule "${basePairedRnaMolecule.state.name}"`}
             <br/>
-            {`In RNA complex "${rnaComplex.props.name}"`}
+            {`In RNA complex "${rnaComplex.state.name}"`}
             <br/>
             {`Base-pair type: "${[(boundingNucleotide0.state.basePair as Nucleotide.BasePair).type]}"`}
             <br/>
@@ -1430,9 +1513,9 @@ export namespace SelectionConstraint {
                 Edit single-stranded region:
               </b>
               <br/>
-              {`In RNA molecule "${rnaMolecule.props.name}"`}
+              {`In RNA molecule "${rnaMolecule.state.name}"`}
               <br/>
-              {`In RNA complex "${rnaComplex.props.name}"`}
+              {`In RNA complex "${rnaComplex.state.name}"`}
               <br/>
               {`${this.props.affectedNucleotides.length - 2} free nucleotides between nucleotide #${fivePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${fivePrimeNucleotide.props.symbol}, exclusive) and nucleotide #${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${threePrimeNucleotide.props.symbol}, exclusive)`}
               <br/>
@@ -1549,20 +1632,20 @@ export namespace SelectionConstraint {
               <br/>
               {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
-              {`In RNA molecule "${rnaMolecule0.props.name}"`}
+              {`In RNA molecule "${rnaMolecule0.state.name}"`}
               <br/>
             </>;
           } else {
             rnaMoleculesAndNucleotidesInfo = <>
               {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide0.props.symbol}, inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide2.props.symbol}, inclusive)`}
               <br/>
-              {`In RNA molecule "${rnaMolecule0.props.name}"`}
+              {`In RNA molecule "${rnaMolecule0.state.name}"`}
               <br/>
               Contiguously bound to:
               <br/>
               {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
-              {`In RNA molecule "${rnaMolecule1.props.name}"`}
+              {`In RNA molecule "${rnaMolecule1.state.name}"`}
               <br/>
             </>;
           }
@@ -1572,7 +1655,7 @@ export namespace SelectionConstraint {
             </b>
             <br/>
             {rnaMoleculesAndNucleotidesInfo}
-            {`In RNA complex "${rnaComplex.props.name}"`}
+            {`In RNA complex "${rnaComplex.state.name}"`}
             <br/>
             {this.renderTransformationData()}
             <br/>
@@ -1623,20 +1706,20 @@ export namespace SelectionConstraint {
               <br/>
               {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
-              {`In RNA molecule "${rnaMolecule0.props.name}"`}
+              {`In RNA molecule "${rnaMolecule0.state.name}"`}
               <br/>
             </>;
           } else {
             rnaMoleculesAndNucleotidesInfo = <>
               {`Nucleotides #${boundingNucleotide0.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide0.props.symbol}, inclusive) - #${boundingNucleotide2.props.nucleotideIndex + rnaMolecule0.props.firstNucleotideIndex} (${boundingNucleotide2.props.symbol}, inclusive)`}
               <br/>
-              {`In RNA molecule "${rnaMolecule0.props.name}"`}
+              {`In RNA molecule "${rnaMolecule0.state.name}"`}
               <br/>
               Bound to:
               <br/>
               {`Nucleotides #${boundingNucleotide1.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide1.props.symbol}, inclusive) - #${boundingNucleotide3.props.nucleotideIndex + rnaMolecule1.props.firstNucleotideIndex} (${boundingNucleotide3.props.symbol}, inclusive)`}
               <br/>
-              {`In RNA molecule "${rnaMolecule1.props.name}"`}
+              {`In RNA molecule "${rnaMolecule1.state.name}"`}
               <br/>
             </>;
           }
@@ -1646,7 +1729,7 @@ export namespace SelectionConstraint {
             </b>
             <br/>
             {rnaMoleculesAndNucleotidesInfo}
-            {`In RNA complex "${rnaComplex.props.name}"`}
+            {`In RNA complex "${rnaComplex.state.name}"`}
             <br/>
             {this.renderTransformationData()}
           </>;
@@ -1691,9 +1774,201 @@ export namespace SelectionConstraint {
             <br/>
             {`3' Nucleotide: ${threePrimeNucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex} (${threePrimeNucleotide.props.symbol}, inclusive)`}
             <br/>
-            {`In RNA molecule "${rnaMolecule.props.name}"`}
+            {`In RNA molecule "${rnaMolecule.state.name}"`}
             <br/>
-            {`In RNA complex "${rnaComplex.props.name}"`}
+            {`In RNA complex "${rnaComplex.state.name}"`}
+            <br/>
+            {this.renderTransformationData()}
+          </>;
+        }
+      }
+    }
+  }
+
+  namespace PerColor {
+    export namespace Edit {
+      export type Props = SelectionConstraintProps & {
+        indexOfClickedOnNucleotide : number
+      };
+
+      type State = {
+        clickedOnNucleotideX : number,
+        clickedOnNucleotideY : number,
+        clickedOnNucleotideXAsString : string,
+        clickedOnNucleotideYAsString : string,
+        displacements : Array<Vector2D>
+      };
+
+      export class Component extends SelectionConstraintComponent<Props, State> {
+        public constructor(props : Props) {
+          super(props);
+        }
+
+        public override getInitialState() {
+          let clickedOnNucleotide = this.props.affectedNucleotides[this.props.indexOfClickedOnNucleotide];
+          let clickedOnNucleotidePosition = clickedOnNucleotide.state.position;
+          return {
+            clickedOnNucleotideX : clickedOnNucleotidePosition.x,
+            clickedOnNucleotideY : clickedOnNucleotidePosition.y,
+            clickedOnNucleotideXAsString : clickedOnNucleotidePosition.x.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+            clickedOnNucleotideYAsString : clickedOnNucleotidePosition.y.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+            displacements : this.props.affectedNucleotides.map((affectedNucleotide : Nucleotide.Component) => {
+              return Vector2D.subtract(affectedNucleotide.state.position, clickedOnNucleotidePosition)
+            })
+          };
+        }
+
+        public override render() {
+          let color = this.props.affectedNucleotides[0].state.stroke;
+          let repositionNucleotides = (x : number, y : number) => {
+            let origin = new Vector2D(x, y);
+            for (let i = 0; i < this.props.affectedNucleotides.length; i++) {
+              this.props.affectedNucleotides[i].setState({
+                position : Vector2D.add(this.state.displacements[i], origin)
+              });
+            }
+          }
+          let colorText : string;
+          if (color.alpha === undefined) {
+            colorText = `rgb(${color.red}, ${color.green}, ${color.blue})`
+          } else {
+            colorText = `rgba(${color.red}, ${color.green}, ${color.blue}, ${color.alpha})`
+          }
+          return <>
+            <b>
+              {`Edit nucleotides with color = ${colorText}:`}
+            </b>
+            <br/>
+            <b>
+              Clicked-on nucleotide position:
+            </b>
+            <br/>
+            <label>
+              x:&nbsp;
+              <input
+                type = "number"
+                step = {DEFAULT_TRANSLATION_MAGNITUDE}
+                value = {this.state.clickedOnNucleotideXAsString}
+                onChange = {event => {
+                  this.setState({
+                    clickedOnNucleotideXAsString : event.target.value
+                  });
+                  let newX = Number.parseFloat(event.target.value);
+                  if (Number.isNaN(newX)) {
+                    return;
+                  }
+                  this.setState({
+                    clickedOnNucleotideX : newX
+                  });
+                  repositionNucleotides(newX, this.state.clickedOnNucleotideY);
+                }}
+              />
+            </label>
+            <br/>
+            <label>
+              y:&nbsp;
+              <input
+                type = "number"
+                step = {DEFAULT_TRANSLATION_MAGNITUDE}
+                value = {this.state.clickedOnNucleotideYAsString}
+                onChange = {event => {
+                  this.setState({
+                    clickedOnNucleotideYAsString : event.target.value
+                  });
+                  let newY = Number.parseFloat(event.target.value);
+                  if (Number.isNaN(newY)) {
+                    return;
+                  }
+                  this.setState({
+                    clickedOnNucleotideY : newY
+                  });
+                  repositionNucleotides(this.state.clickedOnNucleotideX, newY);
+                }}
+              />
+            </label>
+          </>;
+        }
+      }
+    }
+  }
+  
+  namespace _RnaMolecule {
+    export namespace Edit {
+      type Props = PolarSelectionConstraint.Props;
+
+      type State = PolarSelectionConstraint.State;
+
+      export class Component extends PolarSelectionConstraint.Component<Props, State> {
+        public constructor(props : Props) {
+          super(props);
+        }
+
+        public override getInitialState() {
+          return this.getInitialStateHelper();
+        }
+
+        public override render() {
+          let affectedNucleotide0 = this.props.affectedNucleotides[0];
+          let rnaMolecule = this.state.app.state.rnaComplexes[affectedNucleotide0.props.rnaComplexIndex].props.rnaMolecules[affectedNucleotide0.props.rnaMoleculeIndex];
+          return <>
+            <b>
+              {`Edit RNA Molecule`}
+            </b>
+            <br/>
+            <label>
+              Name:&nbsp;
+              <input
+                type = "text"
+                value = {rnaMolecule.state.name}
+                onChange = {event => {
+                  rnaMolecule.setState({
+                    name : event.target.value
+                  });
+                }}
+              />
+            </label>
+            <br/>
+            {this.renderTransformationData()}
+          </>;
+        }
+      }
+    }
+  }
+
+  namespace _RnaComplex {
+    export namespace Edit {
+      type Props = PolarSelectionConstraint.Props;
+
+      type State = PolarSelectionConstraint.State;
+
+      export class Component extends PolarSelectionConstraint.Component<Props, State> {
+        public constructor(props : Props) {
+          super(props);
+        }
+
+        public override getInitialState() {
+          return this.getInitialStateHelper();
+        }
+
+        public override render() {
+          let rnaComplex = this.state.app.state.rnaComplexes[this.props.affectedNucleotides[0].props.rnaComplexIndex];
+          return <>
+            <b>
+              {`Edit RNA Complex`}
+            </b>
+            <br/>
+            <label>
+              Name:&nbsp;
+              <input
+                type = "text"
+                value = {rnaComplex.state.name}
+                onChange = {event => {
+                  rnaComplex.setState({
+                    name : event.target.value
+                  });
+                }}
+              />
+            </label>
             <br/>
             {this.renderTransformationData()}
           </>;

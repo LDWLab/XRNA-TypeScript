@@ -13,6 +13,7 @@ export namespace RnaMolecule {
   };
 
   type State = {
+    name : string,
     firstNucleotideIndex : number
   };
 
@@ -26,6 +27,7 @@ export namespace RnaMolecule {
     public constructor(props : Props) {
       super(props);
       this.state = {
+        name : props.name,
         firstNucleotideIndex : props.firstNucleotideIndex
       };
     }
@@ -78,7 +80,7 @@ export namespace RnaMolecule {
     public findNucleotideByIndex(nucleotideIndex : number) : { arrayEntry : ArrayEntry, arrayIndex : number } {
       let foundByNucleotideIndex = Utils.binarySearch(this.props.nucleotidesIndexMap, (arrayEntry : ArrayEntry) => arrayEntry.nucleotideIndex - nucleotideIndex);
       if (foundByNucleotideIndex === null) {
-        throw `Nucleotide index ${nucleotideIndex} was not found within RnaMolecule ${this.props.name}.`;
+        throw `Nucleotide index ${nucleotideIndex} was not found within RnaMolecule ${this.state.name}.`;
       }
       return foundByNucleotideIndex;
     }

@@ -315,9 +315,9 @@ export namespace LabelLine {
             {`Edit label line for Nucleotide #${this.props.nucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex}`}
           </b>
           <br/>
-          {`In RNA molecule "${rnaMolecule.props.name}"`}
+          {`In RNA molecule "${rnaMolecule.state.name}"`}
           <br/>
-          {`In RNA complex "${rnaComplex.props.name}"`}
+          {`In RNA complex "${rnaComplex.state.name}"`}
           <br/>
           <b>
             Endpoint 0:
