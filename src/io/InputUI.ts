@@ -1,21 +1,23 @@
 import { DEFAULT_STROKE_WIDTH } from "../App";
-import Color, { BLACK, ColorFormat, fromCssString, fromHexadecimal } from "../data_structures/Color";
-import Font, { PartialFont } from "../data_structures/Font";
-import { Nucleotide } from "../components/Nucleotide";
+import { getBasePairType, Nucleotide } from "../components/Nucleotide";
 import { RnaComplex } from "../components/RnaComplex";
-import { RnaMolecule } from "../components/RnaMolecule";
+import { findNucleotidePropsByIndex, insert, RnaMolecule } from "../components/RnaMolecule";
+import Color, { BLACK, ColorFormat, fromCssString, fromHexadecimal, toCSS } from "../data_structures/Color";
+import Font, { PartialFont } from "../data_structures/Font";
 import Vector2D from "../data_structures/Vector2D";
 import xrnaHeader from "./xrnaHeader";
-import { RefObject } from "react";
-import { LabelContent } from "../components/LabelContent";
 
-type FileReaderOutput = {
-  rnaComplexes : Array<RnaComplex.Component>,
+export type FileReaderOutput = {
+  rnaComplexProps : Array<RnaComplex.Props>,
   complexDocumentName : string
+};
+
+export interface InputFileReader {
+  (inputFileContent : string) : FileReaderOutput
 }
 
-interface XrnaFileReader {
-  (inputFileContent : string) : FileReaderOutput
+export interface OutputFileWriter {
+  (rnaComplexes : Array<RnaComplex.Component>) : string
 }
 
 type BasePairsAcrossMolecules = {
@@ -26,18 +28,20 @@ type BasePairsAcrossMolecules = {
   length : number,
 };
 
-const xrnaFileReader : XrnaFileReader = inputFileContent => {
+const xrnaInputFileReader : InputFileReader = (inputFileContent : string) => {
   type ParseDomElementCache = {
-    rnaComplex : RnaComplex.Component | null,
-    rnaMolecule : RnaMolecule.Component | null,
+    rnaComplexProps : RnaComplex.Props | null,
+    rnaMoleculeProps : RnaMolecule.Props | null,
     basePairsAcrossMolecules : Array<BasePairsAcrossMolecules> | null,
     indentation : number
   };
+
   type PreviousDomElementInformation = {
     tagName : string,
     referencedNucleotideIndex? : number
   };
-  function parseDomElement(domElement : Element, output : FileReaderOutput, previousDomElementInformation : PreviousDomElementInformation, cache : ParseDomElementCache = {rnaComplex : null, rnaMolecule : null, basePairsAcrossMolecules : null, indentation : 0}) : void {
+
+  function parseDomElement(domElement : Element, output : FileReaderOutput, previousDomElementInformation : PreviousDomElementInformation, cache : ParseDomElementCache = {rnaComplexProps : null, rnaMoleculeProps : null, basePairsAcrossMolecules : null, indentation : 0}) : void {
     let domElementInformation : PreviousDomElementInformation = {
       tagName : domElement.tagName
     };
@@ -47,42 +51,39 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
         break;
       }
       case "Complex": {
-        cache.rnaComplex = new RnaComplex.Component({
+        cache.rnaComplexProps = {
           name : domElement.getAttribute("Name") as string,
-          rnaMolecules : []
-        });
-        output.rnaComplexes.push(cache.rnaComplex);
+          rnaMoleculeProps : []
+        };
+        output.rnaComplexProps.push(cache.rnaComplexProps);
         cache.basePairsAcrossMolecules = new Array<BasePairsAcrossMolecules>();
         break;
       }
       case "RNAMolecule": {
-        cache.rnaMolecule = new RnaMolecule.Component({
+        cache.rnaMoleculeProps = {
           name : domElement.getAttribute("Name") as string,
-          rnaComplexIndex : output.rnaComplexes.length - 1,
+          rnaComplexIndex : output.rnaComplexProps.length - 1,
           firstNucleotideIndex : 0,
-          nucleotidesIndexMap : [],
-
-        });
-        (cache.rnaComplex as RnaComplex.Component).props.rnaMolecules.push(cache.rnaMolecule);
+          nucleotideProps : [],
+        };
+        (cache.rnaComplexProps as RnaComplex.Props).rnaMoleculeProps.push(cache.rnaMoleculeProps as RnaMolecule.Props);
         break;
       }
       case "NucListData": {
-        let rnaMolecule = cache.rnaMolecule as RnaMolecule.Component;
+        let rnaMoleculeProps = cache.rnaMoleculeProps as RnaMolecule.Props;
         let firstNucleotideIndexAttribute = domElement.getAttribute("StartNucID");
         if (firstNucleotideIndexAttribute != null) {
           let firstNucleotideIndex = Number.parseInt(firstNucleotideIndexAttribute);
           if (Number.isNaN(firstNucleotideIndex)) {
             throw new Error(`This <NucListData>.StartNucID is a non-integer: ${firstNucleotideIndexAttribute}`);
           }
-          rnaMolecule.state = Object.assign(rnaMolecule.state, {
-            firstNucleotideIndex
-          })
+          rnaMoleculeProps.firstNucleotideIndex = firstNucleotideIndex;
         }
         let indexToDataTypeMap : Record<number, string> = {};
         (domElement.getAttribute("DataType") as string).split(".").forEach((dataType : string, index : number) => indexToDataTypeMap[index] = dataType);
         let runningNucleotideIndex = 0;
         let nucleotideIndexToBasePairNucleotideIndexMap : Record<number, number> = {};
-        let rnaMoleculeIndex = (cache.rnaComplex as RnaComplex.Component).props.rnaMolecules.length - 1;
+        let rnaMoleculeIndex = (cache.rnaComplexProps as RnaComplex.Props).rnaMoleculeProps.length - 1;
         for (let textContentLine of (domElement.textContent as string).split("\n")) {
           if (/^\s*$/.test(textContentLine)) {
             continue;
@@ -107,7 +108,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                 if (Number.isNaN(nucleotideIndex)) {
                   throw new Error(`This input <NucListData>.NucID is a non-integer: ${data}`);
                 }
-                runningNucleotideIndex = nucleotideIndex - rnaMolecule.state.firstNucleotideIndex;
+                runningNucleotideIndex = nucleotideIndex - rnaMoleculeProps.firstNucleotideIndex;
                 break;
               case "XPos":
                 x = Number.parseFloat(data);
@@ -129,7 +130,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
                 if (Number.isNaN(basePairNucleotideIndex)) {
                   throw new Error(`This input <NucListData>.BPID is a non-integer: ${data}`);
                 }
-                nucleotideIndexToBasePairNucleotideIndexMap[nucleotideIndex] = basePairNucleotideIndex - rnaMolecule.state.firstNucleotideIndex;
+                nucleotideIndexToBasePairNucleotideIndexMap[nucleotideIndex] = basePairNucleotideIndex - rnaMoleculeProps.firstNucleotideIndex;
                 break;
             }
           });
@@ -138,27 +139,27 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
           }
           runningNucleotideIndex++;
           let props = {
-            rnaComplexIndex : rnaMolecule.props.rnaComplexIndex,
+            rnaComplexIndex : rnaMoleculeProps.rnaComplexIndex,
             rnaMoleculeIndex,
             nucleotideIndex,
             symbol, 
             position : { x, y }
           };
-          if (rnaMolecule.props.nucleotidesIndexMap.some((arrayEntry : RnaMolecule.ArrayEntry) => arrayEntry.nucleotideIndex === nucleotideIndex)) {
+          if (rnaMoleculeProps.nucleotideProps.some((nucleotideProps : Nucleotide.Props) => nucleotideProps.nucleotideIndex === nucleotideIndex)) {
             throw new Error(`This input <NucListData>.NucID is a duplicate: ${nucleotideIndex}`);
           }
-          rnaMolecule.insert(nucleotideIndex, props);
+          insert(rnaMoleculeProps, props);
         }
         for (const [nucleotideIndexAsString, basePairNucleotideIndex] of Object.entries(nucleotideIndexToBasePairNucleotideIndexMap)) {
           let nucleotideIndex = Number.parseInt(nucleotideIndexAsString);
-          let nucleotideProps : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(nucleotideIndex).arrayEntry.nucleotideProps;
+          let nucleotideProps : Nucleotide.Props = findNucleotidePropsByIndex(rnaMoleculeProps, nucleotideIndex).props;
           let basePairNucleotideProps : Nucleotide.Props;
           try {
-            basePairNucleotideProps = rnaMolecule.findNucleotideByIndex(basePairNucleotideIndex).arrayEntry.nucleotideProps;
+            basePairNucleotideProps = findNucleotidePropsByIndex(rnaMoleculeProps, basePairNucleotideIndex).props;
           } catch (exception) {
-            throw new Error(`This <NucListData>.BPID is outside the set of expected nucleotide indices ${basePairNucleotideIndex + rnaMolecule.state.firstNucleotideIndex}`);
+            throw new Error(`This <NucListData>.BPID is outside the set of expected nucleotide indices ${basePairNucleotideIndex + rnaMoleculeProps.firstNucleotideIndex}`);
           }
-          let basePairType = Nucleotide.Component.getBasePairType(nucleotideProps.symbol, basePairNucleotideProps.symbol);
+          let basePairType = getBasePairType(nucleotideProps.symbol, basePairNucleotideProps.symbol);
           if (nucleotideIndex < basePairNucleotideIndex) {
             nucleotideProps = Object.assign(nucleotideProps, {
               basePair : {
@@ -184,33 +185,33 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
         break;
       }
       case "BasePairs": {
-        let rnaMolecule = cache.rnaMolecule as RnaMolecule.Component;
+        let rnaMoleculeProps = cache.rnaMoleculeProps as RnaMolecule.Props;
         let nucleotideIndexAttribute = domElement.getAttribute("nucID") as string;
         let nucleotideIndex = Number.parseInt(nucleotideIndexAttribute);
         if (Number.isNaN(nucleotideIndex)) {
           throw new Error(`This <BasePairs>.nucID is a non-integer: ${nucleotideIndexAttribute}`);
         }
-        nucleotideIndex -= rnaMolecule.state.firstNucleotideIndex;
+        nucleotideIndex -= rnaMoleculeProps.firstNucleotideIndex;
         let basePairNucleotideIndexAttribute = domElement.getAttribute("bpNucID") as string;
         let basePairNucleotideIndex = Number.parseInt(basePairNucleotideIndexAttribute);
         if (Number.isNaN(basePairNucleotideIndex)) {
           throw new Error(`This <BasePairs>.bpNucID is a non-integer: ${basePairNucleotideIndexAttribute}`);
         }
-        basePairNucleotideIndex -= rnaMolecule.state.firstNucleotideIndex;
+        basePairNucleotideIndex -= rnaMoleculeProps.firstNucleotideIndex;
         let lengthAttribute = domElement.getAttribute("length") as string;
         let length = Number.parseInt(lengthAttribute);
         if (Number.isNaN(length)) {
           throw new Error(`This <BasePairs>.length is a non-integer: ${lengthAttribute}`);
         }
-        let rnaMoleculeIndex = (cache.rnaComplex as RnaComplex.Component).props.rnaMolecules.length - 1;
+        let rnaMoleculeIndex = (cache.rnaComplexProps as RnaComplex.Props).rnaMoleculeProps.length - 1;
         let basePairRnaMoleculeNameAttribute = domElement.getAttribute("bpName");
         if (basePairRnaMoleculeNameAttribute === null) {
           for (let i = 0; i < length; i++) {
             let interpolatedNucleotideIndex = nucleotideIndex + i;
             let interpolatedBasePairNucleotideIndex = basePairNucleotideIndex - i;
-            let nucleotideProps : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(interpolatedNucleotideIndex).arrayEntry.nucleotideProps;
-            let basePairNucleotideProps : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(interpolatedBasePairNucleotideIndex).arrayEntry.nucleotideProps;
-            let type = Nucleotide.Component.getBasePairType(nucleotideProps.symbol, basePairNucleotideProps.symbol);
+            let nucleotideProps : Nucleotide.Props = findNucleotidePropsByIndex(rnaMoleculeProps, interpolatedNucleotideIndex).props;
+            let basePairNucleotideProps : Nucleotide.Props = findNucleotidePropsByIndex(rnaMoleculeProps, interpolatedBasePairNucleotideIndex).props;
+            let type = getBasePairType(nucleotideProps.symbol, basePairNucleotideProps.symbol);
             nucleotideProps = Object.assign(nucleotideProps, {
               basePair : {
                 nucleotideIndex : interpolatedBasePairNucleotideIndex,
@@ -242,7 +243,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
         break;
       }
       case "Nuc" : {
-        let firstNucleotideIndex = (cache.rnaMolecule as RnaMolecule.Component).state.firstNucleotideIndex;
+        let firstNucleotideIndex = (cache.rnaMoleculeProps as RnaMolecule.Props).firstNucleotideIndex;
         let referencedNucleotideIndexAttribute = domElement.getAttribute("RefID");
         if (referencedNucleotideIndexAttribute !== null) {
           let referencedNucleotideIndex = Number.parseInt(referencedNucleotideIndexAttribute);
@@ -305,11 +306,11 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
               throw new Error(`This <Nuc>.FontSize attribute is non-numeric: ${fontSizeAttribute}`);
             }
           }
-          let rnaMolecule = cache.rnaMolecule as RnaMolecule.Component;
+          let rnaMoleculeProps = cache.rnaMoleculeProps as RnaMolecule.Props;
           referencedNucleotideIndices.forEach((referencedNucleotideIndex : number) => {
             let nucleotideProps : Nucleotide.Props;
             try {
-              nucleotideProps = rnaMolecule.findNucleotideByIndex(referencedNucleotideIndex).arrayEntry.nucleotideProps;
+              nucleotideProps = findNucleotidePropsByIndex(rnaMoleculeProps, referencedNucleotideIndex).props;
             } catch (exception) {
               throw new Error(`This referenced-nucleotide index indexes a non-existent Nucleotide: ${referencedNucleotideIndex}`);
             }
@@ -340,7 +341,7 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
             if (previousDomElementInformation.referencedNucleotideIndex === null) {
               throw new Error(`This <Nuc> had no attribute <RefID>`);
             }
-            let nucleotideProps : Nucleotide.Props = (cache.rnaMolecule as RnaMolecule.Component).findNucleotideByIndex(previousDomElementInformation.referencedNucleotideIndex as number).arrayEntry.nucleotideProps;
+            let nucleotideProps : Nucleotide.Props = findNucleotidePropsByIndex(cache.rnaMoleculeProps as RnaMolecule.Props, previousDomElementInformation.referencedNucleotideIndex as number).props;
             (domElement.textContent as string).split("\n").forEach((textContentLine : string) => {
               let textContentLineData = textContentLine.trim().split(/\s+/);
               switch (textContentLineData[0]) {
@@ -439,17 +440,16 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
     });
     switch (domElement.tagName) {
       case "Complex": {
-        let rnaComplex = cache.rnaComplex as RnaComplex.Component;
+        let rnaComplexProps = cache.rnaComplexProps as RnaComplex.Props;
         (cache.basePairsAcrossMolecules as BasePairsAcrossMolecules[]).forEach((basePairsAcrossMolecules : BasePairsAcrossMolecules) => {
-          let basePairedRnaMoleculeIndex = rnaComplex.props.rnaMolecules.findIndex((rnaMolecule : RnaMolecule.Component) => rnaMolecule.props.name === basePairsAcrossMolecules.basePairRnaMoleculeName);
+          let basePairedRnaMoleculeIndex = rnaComplexProps.rnaMoleculeProps.findIndex((rnaMoleculeProps : RnaMolecule.Props) => rnaMoleculeProps.name === basePairsAcrossMolecules.basePairRnaMoleculeName);
           for (let i = 0; i < basePairsAcrossMolecules.length; i++) {
             let interpolatedNucleotideIndex = basePairsAcrossMolecules.nucleotideIndex + i;
             let interpolatedBasePairNucleotideIndex = basePairsAcrossMolecules.basePairNucleotideIndex - i;
-            let foundNucleotideProps = (rnaComplex.props.rnaMolecules[basePairsAcrossMolecules.rnaMoleculeIndex] as RnaMolecule.Component).findNucleotideByIndex(interpolatedNucleotideIndex);
-            let nucleotideProps : Nucleotide.Props = foundNucleotideProps.arrayEntry.nucleotideProps;
-            let foundBasePairedNucleotideProps = (rnaComplex.props.rnaMolecules[basePairedRnaMoleculeIndex] as RnaMolecule.Component).findNucleotideByIndex(interpolatedBasePairNucleotideIndex);
-            let basePairedNucleotideProps : Nucleotide.Props = foundBasePairedNucleotideProps.arrayEntry.nucleotideProps;
-            let type = Nucleotide.Component.getBasePairType(nucleotideProps.symbol, basePairedNucleotideProps.symbol);
+            let foundNucleotideProps = findNucleotidePropsByIndex(rnaComplexProps.rnaMoleculeProps[basePairsAcrossMolecules.rnaMoleculeIndex] as RnaMolecule.Props, interpolatedNucleotideIndex);
+            let nucleotideProps : Nucleotide.Props = foundNucleotideProps.props;
+            let basePairedNucleotideProps : Nucleotide.Props = findNucleotidePropsByIndex(rnaComplexProps.rnaMoleculeProps[basePairedRnaMoleculeIndex] as RnaMolecule.Props, interpolatedBasePairNucleotideIndex).props;
+            let type = getBasePairType(nucleotideProps.symbol, basePairedNucleotideProps.symbol);
             nucleotideProps.basePair = {
               rnaMoleculeIndex : basePairedRnaMoleculeIndex,
               nucleotideIndex : interpolatedBasePairNucleotideIndex,
@@ -473,8 +473,8 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
   if (!inputFileContent.startsWith("<!DOCTYPE")) {
     inputFileContent += xrnaHeader + "\n" + inputFileContent;
   }
-  let output = {
-    rnaComplexes : new Array<RnaComplex.Component>(),
+  let output : FileReaderOutput = {
+    rnaComplexProps : new Array<RnaComplex.Props>(),
     complexDocumentName : ""
   }
   Array.from(new DOMParser().parseFromString(inputFileContent, "text/xml").children).forEach(childElement => {
@@ -483,43 +483,41 @@ const xrnaFileReader : XrnaFileReader = inputFileContent => {
   return output;
 };
 
-const jsonFileReader : XrnaFileReader = inputFileContent => {
-  let rnaComplexes : Array<RnaComplex.Component> = [];
+const jsonInputFileReader : InputFileReader = (inputFileContent : string) => {
+  let rnaComplexProps : Array<RnaComplex.Props> = [];
   let complexDocumentName = "Unknown";
   let parsedJson = JSON.parse(inputFileContent);
   if (!("classes" in parsedJson) || !("rnaComplexes" in parsedJson)) {
     throw "Input Json should have \"classes\" and \"rnaComplexes\" variables.";
   }
   let cssClasses = parsedJson.classes as Array<any>;
-  rnaComplexes = (parsedJson.rnaComplexes as Array<any>).map((inputRnaComplex : any, inputRnaComplexIndex : number) => {
+  rnaComplexProps = (parsedJson.rnaComplexes as Array<any>).map((inputRnaComplex : any, inputRnaComplexIndex : number) => {
     if (!("name" in inputRnaComplex) || !("rnaMolecules" in inputRnaComplex)) {
       throw "Input rnaComplex elements of input Json should have \"name\" and \"rnaMolecules\" variables."
     }
     let name = inputRnaComplex.name;
-    let rnaMolecules = (inputRnaComplex.rnaMolecules as Array<any>).map((inputRnaMolecule : any, rnaMoleculeIndex : number) => {
+    let rnaMoleculeProps = (inputRnaComplex.rnaMolecules as Array<any>).map((inputRnaMolecule : any, rnaMoleculeIndex : number) => {
       if (!("name" in inputRnaMolecule) || !("basePairs" in inputRnaMolecule) || !("labels" in inputRnaMolecule) || !("sequence" in inputRnaMolecule)) {
         throw "Input rnaMolecule elements of input Json should have \"name\", \"sequence\", \"basePairs\", \"labels\" variables."
       }
       let name = inputRnaMolecule.name;
-      let rnaMolecule = new RnaMolecule.Component({
+      let rnaMoleculeProps : RnaMolecule.Props = {
         name,
         rnaComplexIndex : inputRnaComplexIndex,
         firstNucleotideIndex : Number.MAX_VALUE,
-        nucleotidesIndexMap : []
-      });
+        nucleotideProps : []
+      };
       (inputRnaMolecule.sequence as Array<any>).forEach(inputSequenceEntry => {
         if (!("classes" in inputSequenceEntry) || !("residueIndex" in inputSequenceEntry) || !("x" in inputSequenceEntry) || !("y" in inputSequenceEntry) || !("residueName" in inputSequenceEntry)) {
           throw "Input sequence elements of input Json should have \"classes\", \"residueIndex\", \"residueName\", \"x\" and \"y\" variables.";
         }
         let nucleotideIndex = Number.parseInt(inputSequenceEntry.residueIndex);
-        if (nucleotideIndex < rnaMolecule.state.firstNucleotideIndex) {
-          rnaMolecule.state = Object.assign(rnaMolecule.state, {
-            firstNucleotideIndex : nucleotideIndex
-          });
+        if (nucleotideIndex < rnaMoleculeProps.firstNucleotideIndex) {
+          rnaMoleculeProps.firstNucleotideIndex = nucleotideIndex;
         }
       });
       (inputRnaMolecule.sequence as Array<any>).forEach(inputSequenceEntry => {
-        let nucleotideIndex = Number.parseInt(inputSequenceEntry.residueIndex) - rnaMolecule.state.firstNucleotideIndex;
+        let nucleotideIndex = Number.parseInt(inputSequenceEntry.residueIndex) - rnaMoleculeProps.firstNucleotideIndex;
         let nucleotideProps : Nucleotide.Props = {
           rnaComplexIndex : inputRnaComplexIndex,
           rnaMoleculeIndex : rnaMoleculeIndex,
@@ -527,7 +525,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
           symbol : inputSequenceEntry.residueName as Nucleotide.Symbol,
           position : new Vector2D(Number.parseFloat(inputSequenceEntry.x), Number.parseFloat(inputSequenceEntry.y))
         };
-        rnaMolecule.insert(nucleotideIndex, nucleotideProps);
+        insert(rnaMoleculeProps, nucleotideProps);
         (inputSequenceEntry.classes as Array<string>).forEach(className => {
           let cssClass = cssClasses.find(cssClass => cssClass.name === className);
           if (cssClass !== undefined) {
@@ -562,7 +560,7 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
         if (!("residueIndex" in label)) {
           throw "Input label elements of input Json should have a \"residueIndex\" variable."
         }
-        let nucleotideProps : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(Number.parseInt(label.residueIndex) - rnaMolecule.state.firstNucleotideIndex).arrayEntry.nucleotideProps;
+        let nucleotideProps : Nucleotide.Props = findNucleotidePropsByIndex(rnaMoleculeProps, Number.parseInt(label.residueIndex) - rnaMoleculeProps.firstNucleotideIndex).props;
         if ("labelContent" in label) {
           let font = Font.DEFAULT_FONT;
           let stroke = BLACK;
@@ -659,10 +657,10 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
             throw "Unrecognized base-pair type.";
           }
         }
-        let residueIndex1 = Number.parseInt(basePair.residueIndex1);
-        let nucleotideProps1 : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(residueIndex1).arrayEntry.nucleotideProps;
-        let residueIndex2 = Number.parseInt(basePair.residueIndex2);
-        let nucleotideProps2 : Nucleotide.Props = rnaMolecule.findNucleotideByIndex(residueIndex2).arrayEntry.nucleotideProps;
+        let residueIndex1 = Number.parseInt(basePair.residueIndex1) - rnaMoleculeProps.firstNucleotideIndex;
+        let nucleotideProps1 : Nucleotide.Props = findNucleotidePropsByIndex(rnaMoleculeProps, residueIndex1).props;
+        let residueIndex2 = Number.parseInt(basePair.residueIndex2) - rnaMoleculeProps.firstNucleotideIndex;
+        let nucleotideProps2 : Nucleotide.Props = findNucleotidePropsByIndex(rnaMoleculeProps, residueIndex2).props;
         let strokeWidth = DEFAULT_STROKE_WIDTH;
         let stroke = BLACK;
         (basePair.classes as Array<string>).forEach(className => {
@@ -701,38 +699,222 @@ const jsonFileReader : XrnaFileReader = inputFileContent => {
           }
         });
       });
-      return rnaMolecule;
+      return rnaMoleculeProps;
     });
-    return new RnaComplex.Component({
+    return {
       name,
-      rnaMolecules
-    });
+      rnaMoleculeProps
+    };
   }); 
   return {
-    rnaComplexes,
+    rnaComplexProps,
     complexDocumentName
   };
 };
 
-const inputFileReaders : Record<string, XrnaFileReader> = {
-  "xrna" : xrnaFileReader,
-  "xml" : xrnaFileReader,
-  "ps" : xrnaFileReader,
-  "ss" : xrnaFileReader,
-  // "str" : (_ : string) => {
-  //   return {
-  //     rnaComplexes : [],
-  //     complexDocumentName : ""
-  //   };
-  // },
-  // "svg" : (_ : string) => {
-  //   return {
-  //     rnaComplexes : [],
-  //     complexDocumentName : ""
-  //   };
-  // },
-  "json" : jsonFileReader
+export const inputFileReaders : Record<string, InputFileReader> = {
+  "xrna" : xrnaInputFileReader,
+  "xml" : xrnaInputFileReader,
+  "ps" : xrnaInputFileReader,
+  "ss" : xrnaInputFileReader,
+  "json" : jsonInputFileReader
 };
 
-export type { XrnaFileReader };
-export default inputFileReaders;
+type BasePairTypeForJson = "canonical" | "wobble" | "mismatch";
+
+type BasePairForJson = {
+  basePairType : BasePairTypeForJson,
+  classes : Array<string>,
+  residueIndex1 : number,
+  residueIndex2 : number
+};
+
+type LabelForJson = {
+  labelContent? : {
+    classes : Array<string>,
+    label : string,
+    x : number,
+    y : number
+  },
+  labelLine? : {
+    classes : Array<string>,
+    x1 : number,
+    y1 : number,
+    x2 : number,
+    y2 : number
+  },
+  residueIndex : number
+};
+
+type CssClassForJson = {
+  ["font-family"]? : string,
+  ["font-size"]? : string,
+  ["font-weight"]? : string,
+  ["font-style"]? : string,
+  ["stroke-width"]? : string,
+  stroke? : string,
+  name : string
+};
+const jsonFileWriter : OutputFileWriter = (rnaComplexes : Array<RnaComplex.Component>) => {
+  let fontCssClasses : Array<CssClassForJson> = [];
+  let strokeCssClasses : Array<CssClassForJson> = [];
+  let labelContentCssClasses : Record<number, Array<string>> = {};
+  let labelLineCssClasses : Record<number, Array<string>> = {};
+  let nucleotideCssClasses : Record<number, Array<string>> = {};
+  let basePairsCssClasses : Record<number, Array<string>> = {};
+  rnaComplexes.forEach(rnaComplex => {
+    rnaComplex.state.rnaMoleculeReferences.forEach((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>) => {
+      let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
+      rnaMolecule.state.nucleotideReferences.forEach((nucleotideReference : React.RefObject<Nucleotide.Component>) => {
+        let nucleotide = nucleotideReference.current as Nucleotide.Component;
+        let nucleotideIndex = nucleotide.props.nucleotideIndex;
+        let fontCssClassName : string = "";
+        const handleFontCss = (font : Font) => {
+          let fontCssClassIndex = fontCssClasses.findIndex(cssClassForJson => cssClassForJson["font-family"] === font.family && cssClassForJson["font-size"] === `${font.size}` && cssClassForJson["font-weight"] === font.weight && cssClassForJson["font-style"] === font.style);
+          if (fontCssClassIndex === -1) {
+            fontCssClassName = `font#${fontCssClasses.length}`;
+            fontCssClasses.push({
+              name : fontCssClassName,
+              ["font-family"] : font.family,
+              ["font-size"] : `${font.size}`,
+              ["font-weight"] : font.weight,
+              ["font-style"] : font.style
+            });
+          } else {
+            fontCssClassName = `font#${fontCssClassIndex}`;
+          }
+        };
+        let strokeCssClassName : string = "";
+        const handleStrokeCss = (stroke : {strokeWidth : number | string, stroke : Color}) => {
+          let strokeAsText = toCSS(stroke.stroke);
+          let strokeCssClassIndex = strokeCssClasses.findIndex(cssClassForJson => cssClassForJson["stroke-width"] === `${stroke.strokeWidth}` && cssClassForJson.stroke === strokeAsText);
+          if (strokeCssClassIndex === -1) {
+            strokeCssClassName = `stroke#${strokeCssClasses.length}`;
+            strokeCssClasses.push({
+              name : strokeCssClassName,
+              ["stroke-width"] : `${stroke.strokeWidth}`,
+              stroke : strokeAsText
+            });
+          } else {
+            strokeCssClassName = `stroke#${strokeCssClassIndex}`;
+          }
+        };
+        handleFontCss(nucleotide.state.font);
+        nucleotideCssClasses[nucleotideIndex] = [
+          "text-" + toCSS(nucleotide.state.stroke),
+          fontCssClassName
+        ];
+        let labelContent = nucleotide.labelContentReference.current;
+        if (labelContent !== null) {
+          handleFontCss(labelContent.state.font);
+          labelContentCssClasses[nucleotideIndex] = [
+            "text-" + toCSS(labelContent.state.stroke),
+            fontCssClassName
+          ];
+        }
+        let labelLine = nucleotide.labelLineReference.current;
+        if (labelLine !== null) {
+          handleStrokeCss(labelLine.state);
+          labelLineCssClasses[nucleotideIndex] = [
+            strokeCssClassName
+          ];
+        }
+        if (nucleotide.state.basePair !== undefined) {
+          handleStrokeCss(nucleotide.state.basePair);
+          basePairsCssClasses[nucleotideIndex] = [
+            strokeCssClassName
+          ];
+        }
+      });
+    });
+  });
+  return JSON.stringify({
+    classes : fontCssClasses.concat(strokeCssClasses),
+    rnaComplexes : rnaComplexes.map((rnaComplex : RnaComplex.Component) => {
+      return {
+        name : rnaComplex.state.name,
+        rnaMolecules : rnaComplex.state.rnaMoleculeReferences.map((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>) => {
+          let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
+          let basePairs = new Array<BasePairForJson>();
+          let labels = new Array<LabelForJson>();
+          rnaMolecule.state.nucleotideReferences.forEach((nucleotideReference : React.RefObject<Nucleotide.Component>) => {
+            let nucleotide = nucleotideReference.current as Nucleotide.Component;
+            let nucleotideIndex = nucleotide.props.nucleotideIndex;
+            let labelContent = nucleotide.labelContentReference.current;
+            let labelLine = nucleotide.labelLineReference.current;
+            if (labelContent !== null || labelLine !== null) {
+              let label : LabelForJson = {
+                residueIndex : nucleotideIndex + rnaMolecule.state.firstNucleotideIndex
+              };
+              if (labelContent !== null) {
+                label.labelContent = {
+                  classes : labelContentCssClasses[nucleotideIndex],
+                  label : labelContent.state.content,
+                  x : labelContent.state.position.x + nucleotide.state.position.x,
+                  y : labelContent.state.position.y + nucleotide.state.position.y
+                };
+              }
+              if (labelLine !== null) {
+                label.labelLine = {
+                  classes : labelLineCssClasses[nucleotideIndex],
+                  x1 : labelLine.state.endpoint0.x + nucleotide.state.position.x,
+                  y1 : labelLine.state.endpoint0.y + nucleotide.state.position.y,
+                  x2 : labelLine.state.endpoint1.x + nucleotide.state.position.x,
+                  y2 : labelLine.state.endpoint1.y + nucleotide.state.position.y
+                };
+              }
+              labels.push(label);
+            }
+            if (nucleotide.state.basePair !== undefined) {
+              let basePairType : BasePairTypeForJson;
+              switch (nucleotide.state.basePair.type) {
+                case Nucleotide.BasePairType.CANONICAL : {
+                  basePairType = "canonical";
+                  break;
+                }
+                case Nucleotide.BasePairType.MISMATCH : {
+                  basePairType = "mismatch";
+                  break;
+                }
+                case Nucleotide.BasePairType.WOBBLE : {
+                  basePairType = "wobble";
+                  break;
+                }
+                default : {
+                    throw "Unrecognized basepair type.";
+                }
+              }
+              let basePair : BasePairForJson = {
+                basePairType,
+                classes : basePairsCssClasses[nucleotideIndex],
+                residueIndex1 : rnaMolecule.state.firstNucleotideIndex + nucleotideIndex,
+                residueIndex2 : rnaMolecule.state.firstNucleotideIndex + nucleotide.state.basePair.nucleotideIndex
+              };
+              basePairs.push(basePair);
+            }
+          });
+          return {
+            name : rnaMolecule.state.name,
+            basePairs,
+            labels,
+            sequence : rnaMolecule.state.nucleotideReferences.map((nucleotideReference : React.RefObject<Nucleotide.Component>) => {
+              let nucleotide = nucleotideReference.current as Nucleotide.Component;
+              let nucleotideIndex = nucleotide.props.nucleotideIndex;
+              return {
+                classes : nucleotideCssClasses[nucleotideIndex],
+                residueIndex : nucleotideIndex + rnaMolecule.state.firstNucleotideIndex,
+                residueName : nucleotide.props.symbol,
+                x : nucleotide.state.position.x,
+                y : nucleotide.state.position.y
+              };
+            })
+          };
+        })
+      };
+    })
+  });
+};
+
+export const outputFileWriters : Record<string, OutputFileWriter> = {
+  "json" : jsonFileWriter
+};

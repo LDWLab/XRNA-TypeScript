@@ -2,31 +2,43 @@ import React from "react";
 import { RnaMolecule } from "./RnaMolecule";
 
 export namespace RnaComplex {
-  type Props = {
+  export type Props = {
     name : string,
-    rnaMolecules : Array<RnaMolecule.Component>
+    rnaMoleculeProps : Array<RnaMolecule.Props>
   };
 
-  type State = {
-    name : string
+  export type State = {
+    name : string,
+    rnaMoleculesJsx : React.ReactNode,
+    rnaMoleculeReferences : Array<React.RefObject<RnaMolecule.Component>>
   };
 
   export class Component extends React.Component<Props, State> {
     public constructor(props : Props) {
       super(props);
+      let rnaMoleculesJsx : Array<JSX.Element> = [];
+      let rnaMoleculeReferences : Array<React.RefObject<RnaMolecule.Component>> = [];
+      props.rnaMoleculeProps.forEach((rnaMoleculeProps : RnaMolecule.Props, rnaMoleculeIndex : number) => {
+        let reference = React.createRef<RnaMolecule.Component>();
+        rnaMoleculeReferences.push(reference);
+        rnaMoleculesJsx.push(<RnaMolecule.Component
+          key = {rnaMoleculeIndex}
+          ref = {reference}
+          {...rnaMoleculeProps}
+        />);
+      });
       this.state = {
-        name : props.name
+        name : props.name,
+        rnaMoleculesJsx,
+        rnaMoleculeReferences
       };
     }
 
-    public override render() : JSX.Element {
+    public override render() {
       return <g
-        key = {this.state.name}
+        transform = "translate(10 10)"
       >
-        {this.props.rnaMolecules.map((rnaMolecule : RnaMolecule.Component, rnaMoleculeIndex : number) => <RnaMolecule.Component
-          key = {rnaMoleculeIndex}
-          {...Object.assign(rnaMolecule.props, rnaMolecule.state)}
-        />)}
+        {this.state.rnaMoleculesJsx}
       </g>
     }
   }

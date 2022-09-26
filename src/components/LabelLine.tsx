@@ -1,10 +1,12 @@
 import React from "react";
 import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
-import { AngleEditor } from "../data_structures/AngleEditor";
-import Color, { ColorEditor, ColorFormat, toCSS } from "../data_structures/Color";
+import Color, { toCSS, ColorFormat } from "../data_structures/Color";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
-import { SelectionConstraint } from "../input_output/selectionConstraints";
+import { AngleEditor } from "./AngleEditor";
+import { ColorEditor } from "./ColorEditor";
 import { Nucleotide } from "./Nucleotide";
+import { RnaMolecule } from "./RnaMolecule";
+import { SelectionConstraint } from "./SelectionConstraints";
 
 export namespace LabelLine {
   export type PartialProps = {
@@ -65,16 +67,16 @@ export namespace LabelLine {
           cx = {this.state.endpoint0.x}
           cy = {this.state.endpoint0.y}
           r = {MOUSE_OVER_RADIUS}
-          visibility = {this.state.displayLabelLineEndpoint0MouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelLineEndpoint0MouseoverFlag && app.state.currentTab === App.Tab.Edit ? "visible" : "hidden"}
           onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint0MouseoverFlag : true
               });
             }
           }}
           onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint0MouseoverFlag : false
               })
@@ -83,8 +85,8 @@ export namespace LabelLine {
           onMouseDown = {event => {
             let labelLine : LabelLine.Component = this;
             switch (event.button) {
-              case App.MOUSE_BUTTON_INDICES.LEFT:
-                let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              case App.MouseButtonIndices.Left:
+                let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
                   isWindowDragListenerFlag : false,
                   initiateDrag() {
                     return labelLine.state.endpoint0;
@@ -100,10 +102,10 @@ export namespace LabelLine {
                   affectedNucleotides : [labelLine.props.nucleotide]
                 };
                 app.setState({
-                  activeDragListener
+                  currentDragListener: activeDragListener
                 });
               break;
-              case App.MOUSE_BUTTON_INDICES.RIGHT:
+              case App.MouseButtonIndices.Right:
                 let ref = React.createRef<LabelLine.Edit.Component>();
                 let nucleotide = this.props.nucleotide;
                 app.setState({
@@ -129,16 +131,16 @@ export namespace LabelLine {
           cx = {this.state.endpoint1.x}
           cy = {this.state.endpoint1.y}
           r = {MOUSE_OVER_RADIUS}
-          visibility = {this.state.displayLabelLineEndpoint1MouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelLineEndpoint1MouseoverFlag && app.state.currentTab === App.Tab.Edit ? "visible" : "hidden"}
           onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint1MouseoverFlag : true
               });
             }
           }}
           onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayLabelLineEndpoint1MouseoverFlag : false
               });
@@ -146,7 +148,7 @@ export namespace LabelLine {
           }}
           onMouseDown = {() => {
             let labelLine : Component = this;
-            let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+            let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
               isWindowDragListenerFlag : false,
               initiateDrag() {
                 return labelLine.state.endpoint1;
@@ -162,7 +164,7 @@ export namespace LabelLine {
               affectedNucleotides : [this.props.nucleotide]
             };
             app.setState({
-              activeDragListener
+              currentDragListener: activeDragListener
             });
           }}
         />
@@ -173,16 +175,16 @@ export namespace LabelLine {
           strokeWidth = {DEFAULT_STROKE_WIDTH}
           fill = "none"
           d = {`M ${endpoint0TranslatedPositively.x} ${endpoint0TranslatedPositively.y} A ${MOUSE_OVER_RADIUS} ${MOUSE_OVER_RADIUS} 0 0 0 ${endpoint0TranslatedNegatively.x} ${endpoint0TranslatedNegatively.y} L ${endpoint1TranslatedNegatively.x} ${endpoint1TranslatedNegatively.y} A ${MOUSE_OVER_RADIUS} ${MOUSE_OVER_RADIUS} 0 0 0 ${endpoint1TranslatedPositively.x} ${endpoint1TranslatedPositively.y} z`}
-          visibility = {this.state.displayLabelLineCenterMouseoverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayLabelLineCenterMouseoverFlag && app.state.currentTab === App.Tab.Edit ? "visible" : "hidden"}
           onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayLabelLineCenterMouseoverFlag : true
               });
             }
           }}
           onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayLabelLineCenterMouseoverFlag : false
               });
@@ -192,8 +194,8 @@ export namespace LabelLine {
             let labelLine = this;
             let nucleotide = this.props.nucleotide;
             switch (event.button) {
-              case App.MOUSE_BUTTON_INDICES.LEFT:
-                let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              case App.MouseButtonIndices.Left:
+                let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
                   isWindowDragListenerFlag : false,
                   initiateDrag() {
                     endpointPositionDifference = Vector2D.subtract(labelLine.state.endpoint1, labelLine.state.endpoint0);
@@ -211,10 +213,10 @@ export namespace LabelLine {
                   affectedNucleotides : [nucleotide]
                 };
                 app.setState({
-                  activeDragListener
+                  currentDragListener: activeDragListener
                 });
                 break;
-              case App.MOUSE_BUTTON_INDICES.RIGHT:
+              case App.MouseButtonIndices.Right:
                 let ref = React.createRef<LabelLine.Edit.Component>();
                 app.setState({
                   rightClickMenuReference : ref,
@@ -279,7 +281,7 @@ export namespace LabelLine {
 
       public override render() {
         let rnaComplex = this.props.app.state.rnaComplexes[this.props.nucleotide.props.rnaComplexIndex];
-        let rnaMolecule = rnaComplex.props.rnaMolecules[this.props.nucleotide.props.rnaMoleculeIndex];
+        let rnaMolecule = rnaComplex.state.rnaMoleculeReferences[this.props.nucleotide.props.rnaMoleculeIndex].current as RnaMolecule.Component;
         let updateOriginAndOrientation = () => {
           let newOrigin = Vector2D.scaleUp(Vector2D.add(this.props.labelLine.state.endpoint0, this.props.labelLine.state.endpoint1), 0.5);
           let newOrientation = Vector2D.toPolar(Vector2D.subtract(this.props.labelLine.state.endpoint1, newOrigin));

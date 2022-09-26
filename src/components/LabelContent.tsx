@@ -1,10 +1,12 @@
 import React, { createRef } from "react";
 import { App, DEFAULT_STROKE_WIDTH, DEFAULT_TRANSLATION_MAGNITUDE, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
-import Color, { ColorEditor, ColorFormat, toCSS } from "../data_structures/Color";
+import Color, { ColorFormat, toCSS } from "../data_structures/Color";
 import Font, { FontEditor } from "../data_structures/Font";
 import Vector2D from "../data_structures/Vector2D";
-import { SelectionConstraint } from "../input_output/selectionConstraints";
+import { ColorEditor } from "./ColorEditor";
 import { Nucleotide } from "./Nucleotide";
+import { RnaMolecule } from "./RnaMolecule";
+import { SelectionConstraint } from "./SelectionConstraints";
 
 export namespace LabelContent {
   export type PartialProps = {
@@ -62,7 +64,7 @@ export namespace LabelContent {
           fill = "none"
           stroke = "red"
           strokeWidth = {DEFAULT_STROKE_WIDTH}
-          visibility = {this.state.displayMouseOverFlag && app.state.currentTab === App.Tab.EDIT ? "visible" : "hidden"}
+          visibility = {this.state.displayMouseOverFlag && app.state.currentTab === App.Tab.Edit ? "visible" : "hidden"}
           transform = {`translate(${this.state.position.x + this.state.graphicalAdjustment.x} ${this.state.position.y + this.state.graphicalAdjustment.y})`}
           width = {this.state.boundingBoxWidth}
           height = {this.state.boundingBoxHeight}
@@ -70,8 +72,8 @@ export namespace LabelContent {
           onMouseDown = {event => {
             let labelContent : Component = this;
             switch (event.button) {
-              case App.MOUSE_BUTTON_INDICES.LEFT:
-                let activeDragListener = app.state.currentTab !== App.Tab.EDIT ? app.windowDragListener : {
+              case App.MouseButtonIndices.Left:
+                let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
                   isWindowDragListenerFlag : false,
                   initiateDrag() {
                     return labelContent.state.position;
@@ -87,10 +89,10 @@ export namespace LabelContent {
                   affectedNucleotides : [this.props.nucleotide]
                 };
                 app.setState({
-                  activeDragListener
+                  currentDragListener: activeDragListener
                 });
                 break;
-              case App.MOUSE_BUTTON_INDICES.RIGHT:
+              case App.MouseButtonIndices.Right:
                 let ref = React.createRef<LabelContent.Edit.Component>();
                 let nucleotide = this.props.nucleotide;
                 app.setState({
@@ -107,14 +109,14 @@ export namespace LabelContent {
             }
           }}
           onMouseEnter = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayMouseOverFlag : true,
               });
             }
           }}
           onMouseLeave = {() => {
-            if (app.state.activeDragListener === null) {
+            if (app.state.currentDragListener === null) {
               this.setState({
                 displayMouseOverFlag : false
               })
@@ -178,7 +180,7 @@ export namespace LabelContent {
   
       public override render() {
         let rnaComplex = this.props.app.state.rnaComplexes[this.props.nucleotide.props.rnaComplexIndex];
-        let rnaMolecule = rnaComplex.props.rnaMolecules[this.props.nucleotide.props.rnaMoleculeIndex];
+        let rnaMolecule = rnaComplex.state.rnaMoleculeReferences[this.props.nucleotide.props.rnaMoleculeIndex].current as RnaMolecule.Component;
         return <>
           <b>
             {`Edit label text for Nucleotide #${this.props.nucleotide.props.nucleotideIndex + rnaMolecule.props.firstNucleotideIndex}`}
