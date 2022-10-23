@@ -48,6 +48,20 @@ export namespace LabelLine {
       let endpoint1TranslatedPositively = Vector2D.add(this.state.endpoint1, scaledOrthogonal);
       let endpoint1TranslatedNegatively = Vector2D.subtract(this.state.endpoint1, scaledOrthogonal);
       let endpointPositionDifference : Vector2D;
+      let handleRightClick = () => {
+        let ref = React.createRef<LabelLine.Edit.Component>();
+        let nucleotide = this.props.nucleotide;
+        app.setState({
+          rightClickMenuReference : ref,
+          rightClickMenuContent : <LabelLine.Edit.Component
+            ref = {ref}
+            affectedNucleotides = {[nucleotide]}
+            app = {app}
+            nucleotide = {nucleotide}
+            labelLine = {this}
+          />
+        });
+      };
       return <>
         <line
           key = "labelLine"
@@ -83,9 +97,9 @@ export namespace LabelLine {
             }
           }}
           onMouseDown = {event => {
-            let labelLine : LabelLine.Component = this;
             switch (event.button) {
-              case App.MouseButtonIndices.Left:
+              case App.MouseButtonIndices.Left : {
+                let labelLine : LabelLine.Component = this;
                 let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
                   isWindowDragListenerFlag : false,
                   initiateDrag() {
@@ -104,21 +118,12 @@ export namespace LabelLine {
                 app.setState({
                   currentDragListener: activeDragListener
                 });
-              break;
-              case App.MouseButtonIndices.Right:
-                let ref = React.createRef<LabelLine.Edit.Component>();
-                let nucleotide = this.props.nucleotide;
-                app.setState({
-                  rightClickMenuReference : ref,
-                  rightClickMenuContent : <LabelLine.Edit.Component
-                    ref = {ref}
-                    affectedNucleotides = {[nucleotide]}
-                    app = {app}
-                    nucleotide = {nucleotide}
-                    labelLine = {this}
-                  />
-                });
                 break;
+              }
+              case App.MouseButtonIndices.Right : {
+                handleRightClick();
+                break;
+              }
             }
           }}
         />
@@ -146,26 +151,35 @@ export namespace LabelLine {
               });
             }
           }}
-          onMouseDown = {() => {
-            let labelLine : Component = this;
-            let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
-              isWindowDragListenerFlag : false,
-              initiateDrag() {
-                return labelLine.state.endpoint1;
-              },
-              drag(totalDrag : Vector2D) {
-                labelLine.setState({
-                  endpoint1 : totalDrag
+          onMouseDown = {event => {
+            switch (event.button) {
+              case App.MouseButtonIndices.Left : {
+                let labelLine : Component = this;
+                let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
+                  isWindowDragListenerFlag : false,
+                  initiateDrag() {
+                    return labelLine.state.endpoint1;
+                  },
+                  drag(totalDrag : Vector2D) {
+                    labelLine.setState({
+                      endpoint1 : totalDrag
+                    });
+                  },
+                  terminateDrag() {
+                    // Do nothing.
+                  },
+                  affectedNucleotides : [this.props.nucleotide]
+                };
+                app.setState({
+                  currentDragListener: activeDragListener
                 });
-              },
-              terminateDrag() {
-                // Do nothing.
-              },
-              affectedNucleotides : [this.props.nucleotide]
-            };
-            app.setState({
-              currentDragListener: activeDragListener
-            });
+                break;
+              }
+              case App.MouseButtonIndices.Right : {
+                handleRightClick();
+                break;
+              }
+            }
           }}
         />
         <path
@@ -194,7 +208,7 @@ export namespace LabelLine {
             let labelLine = this;
             let nucleotide = this.props.nucleotide;
             switch (event.button) {
-              case App.MouseButtonIndices.Left:
+              case App.MouseButtonIndices.Left : {
                 let activeDragListener = app.state.currentTab !== App.Tab.Edit ? app.windowDragListener : {
                   isWindowDragListenerFlag : false,
                   initiateDrag() {
@@ -216,19 +230,11 @@ export namespace LabelLine {
                   currentDragListener: activeDragListener
                 });
                 break;
-              case App.MouseButtonIndices.Right:
-                let ref = React.createRef<LabelLine.Edit.Component>();
-                app.setState({
-                  rightClickMenuReference : ref,
-                  rightClickMenuContent : <LabelLine.Edit.Component
-                    ref = {ref}
-                    affectedNucleotides = {[nucleotide]}
-                    app = {app}
-                    nucleotide = {nucleotide}
-                    labelLine = {this}
-                  />
-                });
+              }
+              case App.MouseButtonIndices.Right : {
+                handleRightClick();
                 break;
+              }
             }
           }}
         />

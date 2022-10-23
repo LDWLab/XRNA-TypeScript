@@ -42,9 +42,7 @@ export namespace RnaMolecule {
     }
 
     public override render() {
-      return <g
-        transform = "translate(10 10)"
-      >
+      return <g>
         {this.state.nucleotidesJsx}
       </g>
     }

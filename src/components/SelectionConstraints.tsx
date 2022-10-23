@@ -5,7 +5,7 @@ import { findNucleotideReferenceByIndex, RnaMolecule } from "../components/RnaMo
 import { RnaComplex } from "../components/RnaComplex";
 import { AngleEditor } from "../components/AngleEditor";
 import { areEqual } from "../data_structures/Color";
-import Vector2D from "../data_structures/Vector2D";
+import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
 import { Circle, Geometry } from "../utils/Geometry";
 import { Utils } from "../utils/Utils";
 
@@ -748,12 +748,127 @@ export namespace SelectionConstraint {
       }
     },
     [RNA_CYCLE] : new class extends SelectionConstraint {
-      override calculateAndApproveSelection(_clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : string | App.DragListener | RightClickMenu {
+      override calculateAndApproveSelection(clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : string | App.DragListener | RightClickMenu {
         if (returnType === ReturnType.DragListener) {
           return `Cannot drag nucleotides using selection constraint "${RNA_CYCLE}"`; 
         }
         switch (returnType) {
           case ReturnType.EditJsxElement:
+            let app = App.Component.getCurrent();
+            let draggedNucleotides : Array<Nucleotide.Component> = [];
+            if (clickedOnNucleotide.state.basePair !== undefined) {
+              return `Selection constraint "${RNA_CYCLE}" does not support right-clicking on base-paired nucleotides. Try a non-base-paired nucleotide.`;
+            }
+            // Treat the RNA complex as a graph G, with nucleotides as vertices and all bonds as edges.
+            // Perform breadth-first search (BFS) on G beginning at the clicked-on nucleotide.
+            // BFS is guaranteed to find the cycle with the fewest number of edges which contain the clicked-on nucleotide.
+            // This cycle is the RNA cycle in question.
+            let cycle : Array<Nucleotide.Component> = [];
+            // --- Begin BFS ---
+            let queue : Array<Nucleotide.Component> = [
+              clickedOnNucleotide
+            ];
+            let visited = new Set<Nucleotide.Component>();
+            let previousVertexMap : Record<string, Nucleotide.Component> = {};
+            let nucleotideToKeyHelper = (nucleotide : Nucleotide.Component) => `${nucleotide.props.rnaComplexIndex}:${nucleotide.props.rnaMoleculeIndex}:${nucleotide.props.nucleotideIndex}`;
+            let iteratePreviousVertices = (currentNucleotide : Nucleotide.Component) => {
+              let previousVertices = [
+                currentNucleotide
+              ];
+              let key = nucleotideToKeyHelper(currentNucleotide);
+              while (true) {
+                currentNucleotide = previousVertexMap[key];
+                if (currentNucleotide === undefined) {
+                  break;
+                }
+                previousVertices.push(currentNucleotide);
+                key = nucleotideToKeyHelper(currentNucleotide);
+              }
+              return previousVertices;
+            };
+            bfsLoop: while (true) {
+              let currentNucleotide = queue.shift();
+              if (currentNucleotide === undefined) {
+                return "The clicked-on nucleotide is not part of a cycle.";
+              }
+              visited.add(currentNucleotide);
+              let rnaComplex = app.state.rnaComplexes[currentNucleotide.props.rnaComplexIndex];
+              let rnaMolecule = rnaComplex.state.rnaMoleculeReferences[currentNucleotide.props.rnaMoleculeIndex].current as RnaMolecule.Component;
+              let arrayIndex = findNucleotideReferenceByIndex(rnaMolecule, currentNucleotide.props.nucleotideIndex).arrayIndex;
+              let neighborNucleotides = [];
+              if (arrayIndex > 0) {
+                neighborNucleotides.push(rnaMolecule.state.nucleotideReferences[arrayIndex - 1].current as Nucleotide.Component);
+              }
+              if (arrayIndex < rnaMolecule.state.nucleotideReferences.length - 1) {
+                neighborNucleotides.push(rnaMolecule.state.nucleotideReferences[arrayIndex + 1].current as Nucleotide.Component);
+              }
+              let basePair = currentNucleotide.state.basePair;
+              if (basePair !== undefined) {
+                let basePairedRnaMolecule = rnaComplex.state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component;
+                neighborNucleotides.push(findNucleotideReferenceByIndex(basePairedRnaMolecule, basePair.nucleotideIndex).reference.current as Nucleotide.Component);
+              }
+              for (let i = 0; i < neighborNucleotides.length; i++) {
+                let neighborNucleotide = neighborNucleotides[i];
+                if (neighborNucleotide === clickedOnNucleotide) {
+                  // Prevent backtracking.
+                  continue;
+                }
+                let previousVertices0 = iteratePreviousVertices(currentNucleotide);
+                let previousVertices1 = iteratePreviousVertices(neighborNucleotide);
+                let previousVerticesInCommon = previousVertices0.filter((previousVertex : Nucleotide.Component) => previousVertices1.includes(previousVertex));
+                if (previousVerticesInCommon.length > 1) {
+                  // Prevent backtracking.
+                  continue;
+                }
+                if (visited.has(neighborNucleotide)) {
+                  // Calculate the cycle.
+                  previousVertices0.reverse();
+                  // Remove the duplicate, clicked-on nucleotide.
+                  previousVertices1.pop();
+                  cycle.push(...previousVertices0, ...previousVertices1);
+                  break bfsLoop;
+                }
+                previousVertexMap[nucleotideToKeyHelper(neighborNucleotide)] = currentNucleotide;
+                queue.push(neighborNucleotide);
+              }
+            }
+            // --- End BFS ---
+            let ref = React.createRef<RnaCycle.Edit.Component>();
+            let boundingNucleotide0 = cycle[0];
+            let indexOfBoundingNucleotide0 = 0;
+            for (let i = 1; i < cycle.length; i++) {
+              let nucleotide = cycle[i];
+              if (nucleotide.props.rnaMoleculeIndex < boundingNucleotide0.props.rnaMoleculeIndex || (nucleotide.props.rnaMoleculeIndex === boundingNucleotide0.props.rnaMoleculeIndex && nucleotide.props.nucleotideIndex < boundingNucleotide0.props.nucleotideIndex)) {
+                boundingNucleotide0 = nucleotide;
+                indexOfBoundingNucleotide0 = i;
+              }
+            }
+            let basePair = boundingNucleotide0.state.basePair;
+            if (basePair === undefined) {
+              return "An error has occured in the calculation of this RNA cycle.";
+            }
+            let basePairedRnaMolecule = app.state.rnaComplexes[boundingNucleotide0.props.rnaComplexIndex].state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component;
+            let basePairedNucleotide = findNucleotideReferenceByIndex(basePairedRnaMolecule, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
+            let candidateIndexOfBoundingNucleotide1 = (indexOfBoundingNucleotide0 + 1) % cycle.length;
+            let boundingNucleotide1 = cycle[candidateIndexOfBoundingNucleotide1];
+            if (basePairedNucleotide !== boundingNucleotide1) {
+              candidateIndexOfBoundingNucleotide1 = (indexOfBoundingNucleotide0 - 1 + cycle.length) % cycle.length;
+              boundingNucleotide1 = cycle[candidateIndexOfBoundingNucleotide1];
+              if (basePairedNucleotide !== boundingNucleotide1) {
+                return "An error has occured in the calculation of this RNA cycle.";
+              }
+            }
+            return {
+              ref,
+              content : <RnaCycle.Edit.Component
+                app = {app}
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+                cycle = {cycle}
+                indexOfBoundingNucleotide0 = {indexOfBoundingNucleotide0}
+                indexOfBoundingNucleotide1 = {candidateIndexOfBoundingNucleotide1}
+              />
+            }
           case ReturnType.FormatJsxElement:
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
@@ -1789,18 +1904,284 @@ export namespace SelectionConstraint {
 
   namespace RnaCycle {
     export namespace Edit {
-      export type Props = {};
-      
-      export type State = {};
+      export type Props = SelectionConstraintProps & {
+        app : App.Component,
+        indexOfBoundingNucleotide0 : number,
+        indexOfBoundingNucleotide1 : number,
+        cycle : Array<Nucleotide.Component>
+      };
 
-      export class Component extends React.Component<Props, State> {
+      type PolarDisplacementData = {
+        nucleotide : Nucleotide.Component,
+        displacement : PolarVector2D
+      };
+
+      type PolarData = {
+        orientation : number,
+        displacementsAsPolarCoordinates : Array<PolarDisplacementData>
+      };
+
+      type BasePairInfo = [number, number, PolarData];
+      
+      export type State = {
+        minimumRadius : number,
+        radius : number,
+        radiusAsString : string,
+        boundingNucleotide0 : Nucleotide.Component,
+        boundingNucleotide1 : Nucleotide.Component,
+        boundingPositionCenter : Vector2D,
+        normal : Vector2D,
+        circleCenterOrientation : number,
+        boundingPositionDistance : number,
+        boundingPositionDistanceSquaredReciprocal : number,
+        basePairsList : Array<BasePairInfo>
+      };
+
+      export class Component extends SelectionConstraintComponent<Props, State> {
         public constructor(props : Props) {
           super(props);
-          this.state = {};
+        }
+
+        public override getInitialState() {
+          // Calculate the average circle.
+          let averagePosition = new Vector2D(0, 0);
+          let cycle = this.props.cycle;
+          cycle.forEach((nucleotide : Nucleotide.Component) => {
+            averagePosition = Vector2D.add(averagePosition, nucleotide.state.position);
+          });
+          let cycleLengthReciprocal = 1 / cycle.length;
+          averagePosition = Vector2D.scaleUp(averagePosition, cycleLengthReciprocal);
+          let averageRadius = 0;
+          cycle.forEach((nucleotide : Nucleotide.Component) => {
+            averageRadius += Vector2D.distance(averagePosition, nucleotide.state.position);
+          });
+          averageRadius *= cycleLengthReciprocal;
+          let boundingNucleotide0 = cycle[this.props.indexOfBoundingNucleotide0];
+          let boundingNucleotide1 = cycle[this.props.indexOfBoundingNucleotide1];
+          let boundingPosition0 = boundingNucleotide0.state.position;
+          let boundingPosition1 = boundingNucleotide1.state.position;
+          let boundingPositionCenter = Vector2D.scaleUp(Vector2D.add(boundingPosition0, boundingPosition1), 0.5);
+          let boundingPositionDistance = Vector2D.distance(boundingPosition0, boundingPosition1);
+          let normal = Vector2D.orthogonalize(Vector2D.subtract(boundingPosition1, boundingPosition0));
+          let circleCenterOrientation = 0;
+          this.props.affectedNucleotides.forEach((affectedNucleotide : Nucleotide.Component) => {
+            circleCenterOrientation += Utils.sign(Vector2D.dotProduct(Vector2D.subtract(affectedNucleotide.state.position, boundingPositionCenter), normal));
+          });
+          // Arbitrarily break ties.
+          if (circleCenterOrientation === 0) {
+            circleCenterOrientation = 1;
+          }
+          let minimumRadius = boundingPositionDistance * 0.5;
+          let basePairsList : Array<BasePairInfo> = [];
+          let populateBasePairsList = (cycleIndex0 : number, cycleIndex1 : number) => {
+            if ([this.props.indexOfBoundingNucleotide0, this.props.indexOfBoundingNucleotide1].includes(cycleIndex0)) {
+              // Ignore the bounding nucleotide base pair.
+              return;
+            }
+            const nucleotide0 = cycle[cycleIndex0];
+            const nucleotide1 = cycle[cycleIndex1];
+            let basePair = nucleotide0.state.basePair;
+            if (basePair === undefined) {
+              return;
+            }
+            let basePairedRnaMolecule = this.props.app.state.rnaComplexes[nucleotide0.props.rnaComplexIndex].state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component;
+            let basePairedNucleotide = findNucleotideReferenceByIndex(basePairedRnaMolecule, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
+            if (basePairedNucleotide === nucleotide1) {
+              let position0 = nucleotide0.state.position;
+              let position1 = nucleotide1.state.position;
+              let center = Vector2D.scaleUp(Vector2D.add(position0, position1), 0.5);
+              let orientation = Vector2D.asAngle(Vector2D.subtract(position1, position0))
+              let displacementsAsPolarCoordinates : Array<PolarDisplacementData> = [];
+              if (nucleotide0.props.rnaMoleculeIndex === nucleotide1.props.rnaMoleculeIndex) {
+                let rnaMolecule = this.props.app.state.rnaComplexes[nucleotide0.props.rnaComplexIndex].state.rnaMoleculeReferences[nucleotide0.props.rnaMoleculeIndex].current as RnaMolecule.Component;
+                let minimumArrayIndex = findNucleotideReferenceByIndex(rnaMolecule, nucleotide0.props.nucleotideIndex).arrayIndex;
+                let maximumArrayIndex = findNucleotideReferenceByIndex(rnaMolecule, nucleotide1.props.nucleotideIndex).arrayIndex;
+                if (maximumArrayIndex < minimumArrayIndex) {
+                  let temp = minimumArrayIndex;
+                  minimumArrayIndex = maximumArrayIndex;
+                  maximumArrayIndex = temp;
+                }
+                for (let arrayIndex = minimumArrayIndex + 1; arrayIndex < maximumArrayIndex; arrayIndex++) {
+                  let nucleotide = rnaMolecule.state.nucleotideReferences[arrayIndex].current as Nucleotide.Component;
+                  let displacement = Vector2D.toPolar(Vector2D.subtract(nucleotide.state.position, center));
+                  displacement.angle -= orientation;
+                  displacementsAsPolarCoordinates.push({
+                    nucleotide,
+                    displacement
+                  });
+                }
+              } else {
+                // TODO: Handle base pairs within the cycle across RNA molecules.
+
+              }
+              basePairsList.push([cycleIndex0, cycleIndex1, {
+                orientation,
+                displacementsAsPolarCoordinates
+              }]);
+            }
+          };
+          for (let i = 1; i < cycle.length; i++) {
+            populateBasePairsList(i - 1, i);
+          }
+          populateBasePairsList(0, cycle.length - 1);
+          return {
+            minimumRadius,
+            radius : Math.max(averageRadius, minimumRadius),
+            radiusAsString : averageRadius.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+            boundingNucleotide0 : cycle[this.props.indexOfBoundingNucleotide0],
+            boundingNucleotide1 : cycle[this.props.indexOfBoundingNucleotide1],
+            boundingPositionCenter,
+            boundingPositionDistance,
+            boundingPositionDistanceSquaredReciprocal :  1 / (boundingPositionDistance * boundingPositionDistance),
+            normal,
+            circleCenterOrientation,
+            basePairsList
+          };
+        }
+
+        private updatePositions(radius : number) {
+          let cycle = this.props.cycle;
+          // https://math.stackexchange.com/questions/256100/how-can-i-find-the-points-at-which-two-circles-intersect
+          let displacementAlongNormal = Vector2D.scaleUp(this.state.normal, Math.sqrt(radius * radius * this.state.boundingPositionDistanceSquaredReciprocal - 0.25));
+          let newCircleCenterCandidate = Vector2D.add(this.state.boundingPositionCenter, displacementAlongNormal);
+          if (this.state.circleCenterOrientation * Vector2D.dotProduct(this.state.normal, Vector2D.subtract(newCircleCenterCandidate, this.state.boundingPositionCenter)) < 0) {
+            // Wrong candidate calculated.
+            newCircleCenterCandidate = Vector2D.subtract(this.state.boundingPositionCenter, displacementAlongNormal);
+          }
+          let newCircleCenter = newCircleCenterCandidate;
+          let cycleIndexToStart = this.props.indexOfBoundingNucleotide0;
+          let cycleIndexToSkip = this.props.indexOfBoundingNucleotide1;
+          let dv0 = Vector2D.subtract(this.state.boundingNucleotide0.state.position, newCircleCenter);
+          let dv1 = Vector2D.subtract(this.state.boundingNucleotide1.state.position, newCircleCenter);
+          // The measure of the minor arc is the angle between the bounding nucleotides' positions and the new circle center.
+          let minorArcMagnitude = Vector2D.angleBetween(dv0, dv1);
+          let majorArcMagnitude = 2 * Math.PI - minorArcMagnitude;
+          let indexOfNextNucleotide = (this.props.indexOfBoundingNucleotide0 + 1) % cycle.length;
+          if (indexOfNextNucleotide === this.props.indexOfBoundingNucleotide1) {
+            indexOfNextNucleotide = (this.props.indexOfBoundingNucleotide1 + 1) % cycle.length;
+            cycleIndexToStart = this.props.indexOfBoundingNucleotide1;
+            cycleIndexToSkip = this.props.indexOfBoundingNucleotide0;
+            dv0 = dv1;
+          }
+          let startingAngle = Vector2D.asAngle(dv0);
+          dv1 = Vector2D.subtract(cycle[indexOfNextNucleotide].state.position, newCircleCenter);
+          let angleIterationDirection = Utils.sign(Vector2D.crossProduct(dv0, dv1));
+          let angleDelta = majorArcMagnitude * angleIterationDirection / (cycle.length - 1);
+          let angle = startingAngle + angleDelta;
+          let newPositionsMap : Record<number, Vector2D> = {};
+          for (let i = cycleIndexToStart + 1;; i++) {
+            // Loop across all non-bounding nucleotides and update their positions.
+            if (i === cycleIndexToStart) {
+              break;
+            }
+            if (i === cycleIndexToSkip) {
+              angle += minorArcMagnitude * angleIterationDirection;
+              continue;
+            }
+            if (i === cycle.length) {
+              i = 0;
+            }
+            newPositionsMap[i] = Vector2D.add(newCircleCenter, Vector2D.toCartesian(angle, radius));
+            angle += angleDelta;
+          }
+          let rnaComplex = this.props.app.state.rnaComplexes[cycle[0].props.rnaComplexIndex];
+          this.state.basePairsList.forEach((basePairInfo : BasePairInfo) => {
+            let index0 = basePairInfo[0];
+            if (!(index0 in newPositionsMap)) {
+              // Skip the bounding nucleotides. They should NOT be re-positioned.
+              return;
+            }
+            let index1 = basePairInfo[1];
+            let nucleotide0 = cycle[index0];
+            let nucleotide1 = cycle[index1];
+            let newPosition0 = newPositionsMap[index0];
+            let newPosition1 = newPositionsMap[index1];
+            let newCenter = Vector2D.scaleUp(Vector2D.add(newPosition0, newPosition1), 0.5);
+            let newOrientation = Vector2D.asAngle(Vector2D.subtract(newPosition1, newPosition0));
+            let polarData = basePairInfo[2];
+            let newPositions = polarData.displacementsAsPolarCoordinates.map(displacementAsPolarCoordinate => {
+              let displacement = displacementAsPolarCoordinate.displacement;
+              let newPolarDisplacement : PolarVector2D = {
+                angle : displacement.angle + newOrientation,
+                radius : displacement.radius
+              };
+              return Vector2D.add(Vector2D.toCartesian(newPolarDisplacement.angle, newPolarDisplacement.radius), newCenter);
+            });
+            polarData.displacementsAsPolarCoordinates.forEach((displacementAsPolarCoordinate, index) => {
+              displacementAsPolarCoordinate.nucleotide.setState({
+                position : newPositions[index]
+              });
+            });
+            polarData.displacementsAsPolarCoordinates.forEach(({ nucleotide }, index : number) => {
+              let basePair = nucleotide.state.basePair;
+              if (basePair !== undefined && nucleotide.isGreaterIndexInBasePair()) {
+                let newPosition = newPositions[index];
+                let basePairedNucleotide = findNucleotideReferenceByIndex(rnaComplex.state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
+                let newBasePairedPosition = newPositions[polarData.displacementsAsPolarCoordinates.findIndex(displacement => displacement.nucleotide === basePairedNucleotide)];
+                nucleotide.updateBasePairJsx(newPosition, newBasePairedPosition, rnaComplex);
+              }
+            });
+            (nucleotide0.isGreaterIndexInBasePair() ? nucleotide0 : nucleotide1).updateBasePairJsx(newPosition1, newPosition0);
+          });
+          Object.entries(newPositionsMap).forEach((newPositionMapping : [string, Vector2D]) => {
+            cycle[Number.parseInt(newPositionMapping[0])].setState({
+              position : newPositionMapping[1]
+            })
+          });
+          App.Component.getCurrent().setState({
+            visualizationElements : [
+              <circle
+                key = {0}
+                cx = {newCircleCenter.x}
+                cy = {newCircleCenter.y}
+                r = {1}
+                fill = "red"
+              />,
+              <circle
+                key = {1}
+                cx = {newCircleCenter.x}
+                cy = {newCircleCenter.y}
+                r = {radius}
+                stroke = "red"
+                fill = "none"
+              />
+            ]
+          });
         }
 
         public override render() {
-          return <></>;
+          return <>
+            <b>
+              Edit RNA Cycle:
+            </b>
+            <br/>
+            <button
+              onClick = {() => {
+                this.updatePositions(this.state.radius);
+              }}
+            >
+              Normalize
+            </button>
+            <br/>
+            <input
+              type = "number"
+              value = {this.state.radiusAsString}
+              min = {this.state.minimumRadius}
+              onChange = {(event : React.ChangeEvent<HTMLInputElement>) => {
+                this.setState({
+                  radiusAsString : event.target.value
+                });
+                let newRadius = Number.parseFloat(event.target.value);
+                if (Number.isNaN(newRadius) || newRadius < this.state.minimumRadius) {
+                  return;
+                }
+                this.setState({
+                  radius : newRadius
+                });
+                this.updatePositions(newRadius);
+              }}
+            />
+          </>;
         }
       }
     }

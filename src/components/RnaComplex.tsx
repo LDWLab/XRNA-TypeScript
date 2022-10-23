@@ -35,9 +35,7 @@ export namespace RnaComplex {
     }
 
     public override render() {
-      return <g
-        transform = "translate(10 10)"
-      >
+      return <g>
         {this.state.rnaMoleculesJsx}
       </g>
     }

@@ -664,6 +664,7 @@ export namespace App {
               transform = {`scale(${this.state.zoom * Math.min(this.state.parentDivWidth / this.state.svgBoundingBox.width, this.state.svgHeight / this.state.svgBoundingBox.height)}) scale(1 -1) translate(${-this.state.svgBoundingBox.x + this.state.viewX} ${-(this.state.svgBoundingBox.y + this.state.svgBoundingBox.height) + this.state.viewY})`}
               onContextMenu = {(event) => event.preventDefault()}
             >
+              {this.state.visualizationElements}
               {this.state.svgWrapper}
             </g>
             <g
