@@ -1916,12 +1916,17 @@ export namespace SelectionConstraint {
         displacement : PolarVector2D
       };
 
-      type PolarData = {
+      type BasePairData = {
         orientation : number,
-        displacementsAsPolarCoordinates : Array<PolarDisplacementData>
+        displacementsAsPolarCoordinates : Array<PolarDisplacementData>,
+        distance : number
       };
 
-      type BasePairInfo = [number, number, PolarData];
+      type BasePairInfo = {
+        indexOfBasePairStart : number,
+        indexOfBasePairEnd : number,
+        basePairData : BasePairData
+      };
       
       export type State = {
         minimumRadius : number,
@@ -1934,7 +1939,9 @@ export namespace SelectionConstraint {
         circleCenterOrientation : number,
         boundingPositionDistance : number,
         boundingPositionDistanceSquaredReciprocal : number,
-        basePairsList : Array<BasePairInfo>
+        basePairsList : Array<BasePairInfo>,
+        indexOfBoundingBasePairStart : number,
+        indexOfBoundingBasePairEnd : number
       };
 
       export class Component extends SelectionConstraintComponent<Props, State> {
@@ -1973,19 +1980,16 @@ export namespace SelectionConstraint {
           }
           let minimumRadius = boundingPositionDistance * 0.5;
           let basePairsList : Array<BasePairInfo> = [];
-          let populateBasePairsList = (cycleIndex0 : number, cycleIndex1 : number) => {
-            if ([this.props.indexOfBoundingNucleotide0, this.props.indexOfBoundingNucleotide1].includes(cycleIndex0)) {
-              // Ignore the bounding nucleotide base pair.
-              return;
-            }
-            const nucleotide0 = cycle[cycleIndex0];
-            const nucleotide1 = cycle[cycleIndex1];
+          let populateBasePairsList = (indexOfBasePairStart : number, indexOfBasePairEnd : number) => {
+            const nucleotide0 = cycle[indexOfBasePairStart];
+            const nucleotide1 = cycle[indexOfBasePairEnd];
             let basePair = nucleotide0.state.basePair;
             if (basePair === undefined) {
               return;
             }
             let basePairedRnaMolecule = this.props.app.state.rnaComplexes[nucleotide0.props.rnaComplexIndex].state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component;
             let basePairedNucleotide = findNucleotideReferenceByIndex(basePairedRnaMolecule, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
+            // Check if the nucleotides within the cycle are consecutively base paired.
             if (basePairedNucleotide === nucleotide1) {
               let position0 = nucleotide0.state.position;
               let position1 = nucleotide1.state.position;
@@ -2014,16 +2018,30 @@ export namespace SelectionConstraint {
                 // TODO: Handle base pairs within the cycle across RNA molecules.
 
               }
-              basePairsList.push([cycleIndex0, cycleIndex1, {
-                orientation,
-                displacementsAsPolarCoordinates
-              }]);
+              basePairsList.push({
+                indexOfBasePairStart,
+                indexOfBasePairEnd,
+                basePairData : {
+                  orientation,
+                  displacementsAsPolarCoordinates,
+                  distance : Vector2D.distance(nucleotide0.state.position, nucleotide1.state.position)
+                }
+              });
             }
           };
           for (let i = 1; i < cycle.length; i++) {
             populateBasePairsList(i - 1, i);
           }
-          populateBasePairsList(0, cycle.length - 1);
+          populateBasePairsList(cycle.length - 1, 0);
+          let indexOfBoundingBasePairStart;
+          let indexOfBoundingBasePairEnd;
+          if (basePairsList.some((basePairInfo : BasePairInfo) => basePairInfo.indexOfBasePairStart === this.props.indexOfBoundingNucleotide0)) {
+            indexOfBoundingBasePairStart = this.props.indexOfBoundingNucleotide0;
+            indexOfBoundingBasePairEnd = this.props.indexOfBoundingNucleotide1;
+          } else {
+            indexOfBoundingBasePairStart = this.props.indexOfBoundingNucleotide1;
+            indexOfBoundingBasePairEnd = this.props.indexOfBoundingNucleotide0;
+          }
           return {
             minimumRadius,
             radius : Math.max(averageRadius, minimumRadius),
@@ -2035,7 +2053,9 @@ export namespace SelectionConstraint {
             boundingPositionDistanceSquaredReciprocal :  1 / (boundingPositionDistance * boundingPositionDistance),
             normal,
             circleCenterOrientation,
-            basePairsList
+            basePairsList,
+            indexOfBoundingBasePairStart,
+            indexOfBoundingBasePairEnd
           };
         }
 
@@ -2049,56 +2069,85 @@ export namespace SelectionConstraint {
             newCircleCenterCandidate = Vector2D.subtract(this.state.boundingPositionCenter, displacementAlongNormal);
           }
           let newCircleCenter = newCircleCenterCandidate;
-          let cycleIndexToStart = this.props.indexOfBoundingNucleotide0;
-          let cycleIndexToSkip = this.props.indexOfBoundingNucleotide1;
-          let dv0 = Vector2D.subtract(this.state.boundingNucleotide0.state.position, newCircleCenter);
-          let dv1 = Vector2D.subtract(this.state.boundingNucleotide1.state.position, newCircleCenter);
-          // The measure of the minor arc is the angle between the bounding nucleotides' positions and the new circle center.
-          let minorArcMagnitude = Vector2D.angleBetween(dv0, dv1);
-          let majorArcMagnitude = 2 * Math.PI - minorArcMagnitude;
-          let indexOfNextNucleotide = (this.props.indexOfBoundingNucleotide0 + 1) % cycle.length;
-          if (indexOfNextNucleotide === this.props.indexOfBoundingNucleotide1) {
-            indexOfNextNucleotide = (this.props.indexOfBoundingNucleotide1 + 1) % cycle.length;
-            cycleIndexToStart = this.props.indexOfBoundingNucleotide1;
-            cycleIndexToSkip = this.props.indexOfBoundingNucleotide0;
-            dv0 = dv1;
-          }
+          let basePair0 = this.state.basePairsList[0];
+          let dv0 = Vector2D.subtract(cycle[this.state.indexOfBoundingBasePairStart].state.position, newCircleCenter);
           let startingAngle = Vector2D.asAngle(dv0);
-          dv1 = Vector2D.subtract(cycle[indexOfNextNucleotide].state.position, newCircleCenter);
-          let angleIterationDirection = Utils.sign(Vector2D.crossProduct(dv0, dv1));
-          let angleDelta = majorArcMagnitude * angleIterationDirection / (cycle.length - 1);
-          let angle = startingAngle + angleDelta;
+          let iterationDirection = Vector2D.rotationDirection(dv0, Vector2D.subtract(cycle[basePair0.indexOfBasePairEnd].state.position, newCircleCenter));
+          let radiusReciprocalOverTwo = 0.5 / radius;
+          type AugmentedBasePair = { basePair : BasePairInfo, angleMagnitude : number };
+          let augmentedBasePairsList : Array<AugmentedBasePair> = this.state.basePairsList.map((basePair : BasePairInfo) => ({
+            basePair,
+            angleMagnitude : 2 * Math.asin(basePair.basePairData.distance * radiusReciprocalOverTwo)
+          }));
+          let angleDelta = augmentedBasePairsList.reduce<number>((cummulative : number, current : AugmentedBasePair) => cummulative - current.angleMagnitude, 2 * Math.PI) / (cycle.length - this.state.basePairsList.length);
+          augmentedBasePairsList.sort((augmentedBasePair0 : AugmentedBasePair, augmentedBasePair1 : AugmentedBasePair) => augmentedBasePair0.basePair.indexOfBasePairStart - augmentedBasePair1.basePair.indexOfBasePairStart);
+          let sortedIndexOfBoundingBasePairStart = augmentedBasePairsList.findIndex((augmentedBasePair : AugmentedBasePair) => augmentedBasePair.basePair.indexOfBasePairStart === this.state.indexOfBoundingBasePairStart);
+          // Reorder the array.
+          augmentedBasePairsList = [...augmentedBasePairsList.slice(sortedIndexOfBoundingBasePairStart), ...augmentedBasePairsList.slice(0, sortedIndexOfBoundingBasePairStart)];
+          let angle = startingAngle;
           let newPositionsMap : Record<number, Vector2D> = {};
-          for (let i = cycleIndexToStart + 1;; i++) {
-            // Loop across all non-bounding nucleotides and update their positions.
-            if (i === cycleIndexToStart) {
+          for (let i = this.state.indexOfBoundingBasePairStart;;) {
+            newPositionsMap[i] = Vector2D.add(newCircleCenter, Vector2D.toCartesian(angle, radius));
+            if (augmentedBasePairsList.length > 0 && i === augmentedBasePairsList[0].basePair.indexOfBasePairStart) {
+              let { angleMagnitude } = augmentedBasePairsList.shift() as AugmentedBasePair;
+              angle += angleMagnitude * iterationDirection;
+            } else {
+              angle += angleDelta * iterationDirection;
+            }
+            i = (i + 1) % cycle.length;
+            if (i === this.state.indexOfBoundingBasePairStart) {
               break;
             }
-            if (i === cycleIndexToSkip) {
-              angle += minorArcMagnitude * angleIterationDirection;
-              continue;
-            }
-            if (i === cycle.length) {
-              i = 0;
-            }
-            newPositionsMap[i] = Vector2D.add(newCircleCenter, Vector2D.toCartesian(angle, radius));
-            angle += angleDelta;
           }
+          // let cycleIndexToStart = this.props.indexOfBoundingNucleotide0;
+          // let cycleIndexToSkip = this.props.indexOfBoundingNucleotide1;
+          // let dv0 = Vector2D.subtract(this.state.boundingNucleotide0.state.position, newCircleCenter);
+          // let dv1 = Vector2D.subtract(this.state.boundingNucleotide1.state.position, newCircleCenter);
+          // The measure of the minor arc is the angle between the bounding nucleotides' positions and the new circle center.
+          // let minorArcMagnitude = Vector2D.angleBetween(dv0, dv1);
+          // let majorArcMagnitude = 2 * Math.PI - minorArcMagnitude;
+          // let indexOfNextNucleotide = (this.props.indexOfBoundingNucleotide0 + 1) % cycle.length;
+          // if (indexOfNextNucleotide === this.props.indexOfBoundingNucleotide1) {
+          //   indexOfNextNucleotide = (this.props.indexOfBoundingNucleotide1 + 1) % cycle.length;
+          //   cycleIndexToStart = this.props.indexOfBoundingNucleotide1;
+          //   cycleIndexToSkip = this.props.indexOfBoundingNucleotide0;
+          //   dv0 = dv1;
+          // }
+          // dv1 = Vector2D.subtract(cycle[indexOfNextNucleotide].state.position, newCircleCenter);
+          // let angleIterationDirection = Utils.sign(Vector2D.crossProduct(dv0, dv1));
+          // let angleDelta = majorArcMagnitude * angleIterationDirection / (cycle.length - 1);
+          // let angle = startingAngle + angleDelta;
+          // let newPositionsMap : Record<number, Vector2D> = {};
+          // for (let i = cycleIndexToStart + 1;; i++) {
+          //   // Loop across all non-bounding nucleotides and update their positions.
+          //   if (i === cycleIndexToStart) {
+          //     break;
+          //   }
+          //   if (i === cycleIndexToSkip) {
+          //     angle += minorArcMagnitude * angleIterationDirection;
+          //     continue;
+          //   }
+          //   if (i === cycle.length) {
+          //     i = 0;
+          //   }
+          //   newPositionsMap[i] = Vector2D.add(newCircleCenter, Vector2D.toCartesian(angle, radius));
+          //   angle += angleDelta;
+          // }
           let rnaComplex = this.props.app.state.rnaComplexes[cycle[0].props.rnaComplexIndex];
           this.state.basePairsList.forEach((basePairInfo : BasePairInfo) => {
-            let index0 = basePairInfo[0];
-            if (!(index0 in newPositionsMap)) {
+            let index0 = basePairInfo.indexOfBasePairStart;
+            if (index0 === this.state.indexOfBoundingBasePairStart) {
               // Skip the bounding nucleotides. They should NOT be re-positioned.
               return;
             }
-            let index1 = basePairInfo[1];
+            let index1 = basePairInfo.indexOfBasePairEnd;
             let nucleotide0 = cycle[index0];
             let nucleotide1 = cycle[index1];
             let newPosition0 = newPositionsMap[index0];
             let newPosition1 = newPositionsMap[index1];
             let newCenter = Vector2D.scaleUp(Vector2D.add(newPosition0, newPosition1), 0.5);
             let newOrientation = Vector2D.asAngle(Vector2D.subtract(newPosition1, newPosition0));
-            let polarData = basePairInfo[2];
+            let polarData = basePairInfo.basePairData;
             let newPositions = polarData.displacementsAsPolarCoordinates.map(displacementAsPolarCoordinate => {
               let displacement = displacementAsPolarCoordinate.displacement;
               let newPolarDisplacement : PolarVector2D = {
@@ -2107,21 +2156,23 @@ export namespace SelectionConstraint {
               };
               return Vector2D.add(Vector2D.toCartesian(newPolarDisplacement.angle, newPolarDisplacement.radius), newCenter);
             });
-            polarData.displacementsAsPolarCoordinates.forEach((displacementAsPolarCoordinate, index) => {
-              displacementAsPolarCoordinate.nucleotide.setState({
-                position : newPositions[index]
+            polarData.displacementsAsPolarCoordinates.forEach(({ nucleotide }, index) => {
+              let newPosition = newPositions[index];
+              nucleotide.setState({
+                position : newPosition
               });
-            });
-            polarData.displacementsAsPolarCoordinates.forEach(({ nucleotide }, index : number) => {
               let basePair = nucleotide.state.basePair;
               if (basePair !== undefined && nucleotide.isGreaterIndexInBasePair()) {
-                let newPosition = newPositions[index];
                 let basePairedNucleotide = findNucleotideReferenceByIndex(rnaComplex.state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
                 let newBasePairedPosition = newPositions[polarData.displacementsAsPolarCoordinates.findIndex(displacement => displacement.nucleotide === basePairedNucleotide)];
                 nucleotide.updateBasePairJsx(newPosition, newBasePairedPosition, rnaComplex);
               }
             });
-            (nucleotide0.isGreaterIndexInBasePair() ? nucleotide0 : nucleotide1).updateBasePairJsx(newPosition1, newPosition0);
+            if (nucleotide0.isGreaterIndexInBasePair()) {
+              nucleotide0.updateBasePairJsx(newPosition0, newPosition1);
+            } else {
+              nucleotide1.updateBasePairJsx(newPosition1, newPosition0);
+            }
           });
           Object.entries(newPositionsMap).forEach((newPositionMapping : [string, Vector2D]) => {
             cycle[Number.parseInt(newPositionMapping[0])].setState({

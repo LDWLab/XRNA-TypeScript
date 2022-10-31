@@ -1,3 +1,5 @@
+import { Utils } from "../utils/Utils";
+
 export default class Vector2D {
   public x : number;
   public y : number;
@@ -145,6 +147,10 @@ export default class Vector2D {
 
   public static rejectUsingNormalDirection(v : Vector2D, normalDirection : Vector2D) {
     return Vector2D.subtract(v, Vector2D.projectUsingNormalDirection(v, normalDirection));
+  }
+
+  public static rotationDirection(dv0 : Vector2D, dv1 : Vector2D) {
+    return Utils.sign(Vector2D.crossProduct(dv0, dv1));
   }
 }
 
