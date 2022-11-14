@@ -7,7 +7,7 @@ import { RnaMolecule } from './components/RnaMolecule';
 import { SelectionConstraint } from './components/SelectionConstraints';
 import { CHARCOAL_GRAY, Color, FOREST_GREEN, toCSS } from './data_structures/Color';
 import Vector2D from './data_structures/Vector2D';
-import { InputFileReader, inputFileReaders, OutputFileWriter, outputFileWriters } from './io/InputUI';
+import { InputFileReader, inputFileReaders, jsonToRnaComplexProps, OutputFileWriter, outputFileWriters } from './io/InputUI';
 import { Utils } from './utils/Utils';
 
 // Begin constants
@@ -688,6 +688,46 @@ export namespace App {
           </svg>
         </DivWithResizeDetector>
       </>;
+    }
+
+    public override componentDidMount() {
+      let index = document.URL.indexOf('?');
+      let params : Record<string, string> = {};
+      if (index != -1) {
+        let pairs = document.URL.substring(index + 1, document.URL.length).split('&');
+        for (let i = 0; i < pairs.length; i++) {
+          let nameVal = pairs[i].split('=');
+          params[nameVal[0]] = nameVal[1];
+        }
+      }
+      if ("r2dt_job_id" in params) {
+        let promise = fetch(`https://www.ebi.ac.uk/Tools/services/rest/r2dt/result/r2dt-${params["r2dt_job_id"]}/json`, {
+          method : "GET"
+        });
+        promise.then(data => {
+          data.json().then(json => {
+            let parsedInput = jsonToRnaComplexProps(json);
+            this.setState({
+              svgWrapper : <SvgWrapper.Component
+                ref = {svgWrapperReference}
+                app = {this}
+                rnaComplexProps = {parsedInput.rnaComplexProps}
+              />
+            });
+            let rnaComplexes : Array<RnaComplex.Component> = [];
+            this.setState({
+              zoom : 1,
+              zoomExponent : 0,
+              zoomAsString : "1",
+              viewX : 0,
+              viewY : 0,
+              viewXAsString : "0",
+              viewYAsString : "0",
+              rnaComplexes
+            });
+          });
+        });
+      }
     }
 
     public override componentDidUpdate(previousProps : Props, previousState : State) {

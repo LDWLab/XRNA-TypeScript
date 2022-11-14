@@ -8,9 +8,10 @@ import { areEqual } from "../data_structures/Color";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
 import { Circle, Geometry } from "../utils/Geometry";
 import { Utils } from "../utils/Utils";
+import { BasePairsEditor } from "./BasePairsEditor";
 
 export namespace SelectionConstraint {
-  enum ReturnType {
+  export enum ReturnType {
     DragListener,
     EditJsxElement,
     FormatJsxElement,
@@ -28,15 +29,6 @@ export namespace SelectionConstraint {
     abstract calculateAndApproveSelection(clickedOnNucleotide : Nucleotide.Component, returnType : ReturnType) : App.DragListener | string | RightClickMenu;
     attemptDrag(clickedOnNucleotide : Nucleotide.Component) : App.DragListener | string {
       return this.calculateAndApproveSelection(clickedOnNucleotide, ReturnType.DragListener) as App.DragListener | string;
-    }
-    getEditMenuContent(clickedOnNucleotide : Nucleotide.Component) : RightClickMenu | string {
-      return this.calculateAndApproveSelection(clickedOnNucleotide, ReturnType.EditJsxElement) as RightClickMenu | string;
-    }
-    getFormatMenuContent(clickedOnNucleotide : Nucleotide.Component) : RightClickMenu | string {
-      return this.calculateAndApproveSelection(clickedOnNucleotide, ReturnType.FormatJsxElement) as RightClickMenu | string;
-    }
-    getAnnotateMenuContent(clickedOnNucleotide : Nucleotide.Component) : RightClickMenu | string {
-      return this.calculateAndApproveSelection(clickedOnNucleotide, ReturnType.AnnotateJsxElement) as RightClickMenu | string;
     }
   };
 
@@ -156,7 +148,7 @@ export namespace SelectionConstraint {
                 },
                 affectedNucleotides : [clickedOnNucleotide]
               };
-            case ReturnType.EditJsxElement:
+            case ReturnType.EditJsxElement : {
               let ref = React.createRef<SingleNucleotide.Edit.Component>();
               return {
                 ref,
@@ -165,7 +157,17 @@ export namespace SelectionConstraint {
                   affectedNucleotides = {[clickedOnNucleotide]}
                 />
               };
-            case ReturnType.FormatJsxElement:
+            }
+            case ReturnType.FormatJsxElement : {
+              let ref = React.createRef<SingleNucleotide.Format.Component>();
+              return  {
+                ref,
+                content : <SingleNucleotide.Format.Component
+                  ref = {ref}
+                  affectedNucleotides = {[clickedOnNucleotide]}
+                />
+              }
+            }
             case ReturnType.AnnotateJsxElement:
               return "Not yet implemented.";
             default:
@@ -295,6 +297,7 @@ export namespace SelectionConstraint {
                   />
                 };
               case ReturnType.FormatJsxElement:
+              case ReturnType.AnnotateJsxElement:
                 return "Not yet implemented.";
               default:
                 throw "Unrecognized ReturnType.";
@@ -352,6 +355,7 @@ export namespace SelectionConstraint {
                   />
                 };
               case ReturnType.FormatJsxElement:
+              case ReturnType.AnnotateJsxElement:
                 return "Not yet implemented.";
               default:
                 throw "Unrecognized ReturnType.";
@@ -436,6 +440,7 @@ export namespace SelectionConstraint {
                 />
               };
             case ReturnType.FormatJsxElement:
+            case ReturnType.AnnotateJsxElement:
               return "Not yet implemented.";
             default:
               throw "Unrecognized ReturnType.";
@@ -1409,6 +1414,45 @@ export namespace SelectionConstraint {
             </label>
             <br/>
           </>;
+        }
+      }
+    }
+
+    export namespace Format {
+      export type Props = SelectionConstraintProps;
+
+      export type State = {};
+
+      export class Component extends SelectionConstraintComponent<Props, State> {
+        public constructor(props : Props) {
+          super(props);
+        }
+
+        public override getInitialState() {
+          return {};
+        }
+
+        public override render() {
+          const nucleotide = this.props.affectedNucleotides[0];
+          const app = App.Component.getCurrent();
+          const rnaComplex = app.state.rnaComplexes[nucleotide.props.rnaComplexIndex]
+          const rnaMolecule = rnaComplex.state.rnaMoleculeReferences[nucleotide.props.rnaMoleculeIndex].current as RnaMolecule.Component;
+          return <>
+            <b>
+              Format single nucleotide:
+            </b>
+            <br/>
+            {`Nucleotide #${nucleotide.props.nucleotideIndex + rnaMolecule.state.firstNucleotideIndex} (${nucleotide.state.symbol})`}
+            <br/>
+            {`In RNA molecule "${rnaMolecule.state.name}"`}
+            <br/>
+            {`In RNA complex "${rnaComplex.state.name}"`}
+            <br/>
+            <BasePairsEditor
+              rnaMolecule = {rnaMolecule}
+              initialContiguousBasePairs = {[]}
+            />
+          </>
         }
       }
     }

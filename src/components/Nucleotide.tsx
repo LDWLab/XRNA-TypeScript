@@ -136,15 +136,15 @@ export namespace Nucleotide {
                 let rightClickMenuOrErrorMessage : SelectionConstraint.RightClickMenu | string;
                 switch (app.state.currentTab) {
                   case App.Tab.Annotate : {
-                    rightClickMenuOrErrorMessage = selectionConstraint.getAnnotateMenuContent(this);
+                    rightClickMenuOrErrorMessage = selectionConstraint.calculateAndApproveSelection(this, SelectionConstraint.ReturnType.AnnotateJsxElement) as SelectionConstraint.RightClickMenu | string;
                     break;
                   }
                   case App.Tab.Edit : {
-                    rightClickMenuOrErrorMessage = selectionConstraint.getEditMenuContent(this);
+                    rightClickMenuOrErrorMessage = selectionConstraint.calculateAndApproveSelection(this, SelectionConstraint.ReturnType.EditJsxElement) as SelectionConstraint.RightClickMenu | string;
                     break;
                   }
                   case App.Tab.Format : {
-                    rightClickMenuOrErrorMessage = selectionConstraint.getFormatMenuContent(this);
+                    rightClickMenuOrErrorMessage = selectionConstraint.calculateAndApproveSelection(this, SelectionConstraint.ReturnType.FormatJsxElement) as SelectionConstraint.RightClickMenu | string;
                     break;
                   }
                   default : {

@@ -483,13 +483,12 @@ const xrnaInputFileReader : InputFileReader = (inputFileContent : string) => {
   return output;
 };
 
-const jsonInputFileReader : InputFileReader = (inputFileContent : string) => {
-  let rnaComplexProps : Array<RnaComplex.Props> = [];
-  let complexDocumentName = "Unknown";
-  let parsedJson = JSON.parse(inputFileContent);
+export function jsonToRnaComplexProps(parsedJson : { classes : Array<any>, rnaComplexes : Array<any> }, invertYAxis = true) {
   if (!("classes" in parsedJson) || !("rnaComplexes" in parsedJson)) {
     throw "Input Json should have \"classes\" and \"rnaComplexes\" variables.";
   }
+  let rnaComplexProps : Array<RnaComplex.Props> = [];
+  let complexDocumentName = "Unknown";
   let cssClasses = parsedJson.classes as Array<any>;
   rnaComplexProps = (parsedJson.rnaComplexes as Array<any>).map((inputRnaComplex : any, inputRnaComplexIndex : number) => {
     if (!("name" in inputRnaComplex) || !("rnaMolecules" in inputRnaComplex)) {
@@ -705,11 +704,32 @@ const jsonInputFileReader : InputFileReader = (inputFileContent : string) => {
       name,
       rnaMoleculeProps
     };
-  }); 
+  });
+  if (invertYAxis) {
+    rnaComplexProps.forEach((rnaComplexProp : RnaComplex.Props) => {
+      rnaComplexProp.rnaMoleculeProps.forEach((rnaMoleculeProp : RnaMolecule.Props) => {
+        rnaMoleculeProp.nucleotideProps.forEach((nucleotideProp : Nucleotide.Props) => {
+          nucleotideProp.position.y *= -1;
+          if (nucleotideProp.labelLineProps !== undefined) {
+            nucleotideProp.labelLineProps.endpoint0.y *= -1;
+            nucleotideProp.labelLineProps.endpoint1.y *= -1;
+          }
+          if (nucleotideProp.labelContentProps !== undefined) {
+            nucleotideProp.labelContentProps.position.y *= -1;
+            nucleotideProp.labelContentProps.graphicalAdjustment.y *= -1;
+          }
+        });
+      });
+    });
+  }
   return {
     rnaComplexProps,
     complexDocumentName
   };
+}
+
+const jsonInputFileReader : InputFileReader = (inputFileContent : string) => {
+  return jsonToRnaComplexProps(JSON.parse(inputFileContent));
 };
 
 export const inputFileReaders : Record<string, InputFileReader> = {
