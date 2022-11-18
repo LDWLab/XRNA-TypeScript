@@ -701,7 +701,8 @@ export namespace App {
         }
       }
       if ("r2dt_job_id" in params) {
-        let promise = fetch(`https://www.ebi.ac.uk/Tools/services/rest/r2dt/result/r2dt-${params["r2dt_job_id"]}/json`, {
+        let promise = fetch(`https://www.ebi.ac.uk/Tools/services/rest/r2dt/result/${params["r2dt_job_id"]}/json`, {
+        //let promise = fetch(`https://www.ebi.ac.uk/Tools/services/rest/r2dt/result/r2dt-${params["r2dt_job_id"]}/json`, {
           method : "GET"
         });
         promise.then(data => {
