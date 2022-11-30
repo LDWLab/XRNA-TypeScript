@@ -8,7 +8,7 @@ import { areEqual } from "../data_structures/Color";
 import Vector2D, { PolarVector2D } from "../data_structures/Vector2D";
 import { Circle, Geometry } from "../utils/Geometry";
 import { Utils } from "../utils/Utils";
-import { BasePairsEditor } from "./BasePairsEditor";
+import { BasePairsEditor, ContiguousBasePairs } from "./BasePairsEditor";
 
 export namespace SelectionConstraint {
   export enum ReturnType {
@@ -525,7 +525,7 @@ export namespace SelectionConstraint {
         switch (returnType) {
           case ReturnType.DragListener:
             return linearDrag(clickedOnNucleotide.state.position, draggedNucleotides);
-          case ReturnType.EditJsxElement:
+          case ReturnType.EditJsxElement : {
             let ref = React.createRef<SingleHelix.Edit.Component>();
             return {
               ref,
@@ -538,7 +538,17 @@ export namespace SelectionConstraint {
                 indexOfBoundingNucleotide3 = {indexOfBoundingNucleotide3}
               />
             };
-          case ReturnType.FormatJsxElement:
+          }
+          case ReturnType.FormatJsxElement : {
+            let ref = React.createRef<SingleHelix.Format.Component>();
+            return {
+              ref,
+              content : <SingleHelix.Format.Component
+                ref = {ref}
+                affectedNucleotides = {draggedNucleotides}
+              />
+            };
+          }
           case ReturnType.AnnotateJsxElement:
             return "Not yet implemented.";
           default:
@@ -1102,6 +1112,24 @@ export namespace SelectionConstraint {
     }
   }
 
+  abstract class FormatTabComponent<Props extends SelectionConstraintProps, State extends ContiguousBasePairs.PartialProps> extends SelectionConstraintComponent<Props, State> {
+    protected basePairsEditor : React.RefObject<BasePairsEditor.Component> = React.createRef<BasePairsEditor.Component>();
+
+    constructor(props : Props) {
+      super(props);
+    }
+
+    public override reset() {
+      let newState = this.getInitialState();
+      this.setState(newState);
+      (this.basePairsEditor.current as BasePairsEditor.Component).setState({
+        contiguousBasePairsProps : [
+          newState
+        ]
+      });
+    }
+  }
+
   namespace PolarSelectionConstraint {
     type NucleotideTransformationData = {
       nucleotide : Nucleotide.Component,
@@ -1421,36 +1449,53 @@ export namespace SelectionConstraint {
     export namespace Format {
       export type Props = SelectionConstraintProps;
 
-      export type State = {};
+      export type State = ContiguousBasePairs.PartialProps & {
+        rnaComplex : RnaComplex.Component,
+        rnaMolecule : RnaMolecule.Component,
+        nucleotide : Nucleotide.Component
+      };
 
-      export class Component extends SelectionConstraintComponent<Props, State> {
+      export class Component extends FormatTabComponent<Props, State> {
         public constructor(props : Props) {
           super(props);
         }
 
         public override getInitialState() {
-          return {};
+          const nucleotide = this.props.affectedNucleotides[0];
+          const app = App.Component.getCurrent();
+
+          const rnaComplex = app.state.rnaComplexes[nucleotide.props.rnaComplexIndex];
+          const rnaMolecule = rnaComplex.state.rnaMoleculeReferences[nucleotide.props.rnaMoleculeIndex].current as RnaMolecule.Component;
+          let fivePrimeNucleotideIndex = this.props.affectedNucleotides[0].props.nucleotideIndex;
+          return {
+            rnaComplex,
+            rnaMolecule,
+            nucleotide,
+            rnaMolecule0 : rnaMolecule,
+            fivePrimeStart : rnaMolecule.state.firstNucleotideIndex + fivePrimeNucleotideIndex,
+            threePrimeStart : NaN,
+            length : 0
+          };
         }
 
         public override render() {
-          const nucleotide = this.props.affectedNucleotides[0];
-          const app = App.Component.getCurrent();
-          const rnaComplex = app.state.rnaComplexes[nucleotide.props.rnaComplexIndex]
-          const rnaMolecule = rnaComplex.state.rnaMoleculeReferences[nucleotide.props.rnaMoleculeIndex].current as RnaMolecule.Component;
           return <>
             <b>
               Format single nucleotide:
             </b>
             <br/>
-            {`Nucleotide #${nucleotide.props.nucleotideIndex + rnaMolecule.state.firstNucleotideIndex} (${nucleotide.state.symbol})`}
+            {`Nucleotide #${this.state.nucleotide.props.nucleotideIndex + this.state.rnaMolecule.state.firstNucleotideIndex} (${this.state.nucleotide.state.symbol})`}
             <br/>
-            {`In RNA molecule "${rnaMolecule.state.name}"`}
+            {`In RNA molecule "${this.state.rnaMolecule.state.name}"`}
             <br/>
-            {`In RNA complex "${rnaComplex.state.name}"`}
+            {`In RNA complex "${this.state.rnaComplex.state.name}"`}
             <br/>
-            <BasePairsEditor
-              rnaMolecule = {rnaMolecule}
-              initialContiguousBasePairs = {[]}
+            <BasePairsEditor.Component
+              ref = {this.basePairsEditor}
+              multipleHelicesFlag = {false}
+              initialContiguousBasePairs = {[
+                this.state
+              ]}
             />
           </>
         }
@@ -1823,6 +1868,68 @@ export namespace SelectionConstraint {
           </>;
         }
       } 
+    }
+
+    export namespace Format {
+      type Props = SelectionConstraintProps;
+
+      type State = ContiguousBasePairs.PartialProps;
+
+      export class Component extends FormatTabComponent<Props, State> {
+        public constructor(props : Props) {
+          super(props);
+        }
+
+        public override getInitialState() {
+            this.props.affectedNucleotides.sort((nucleoitde0, nucleotide1) => nucleoitde0.props.nucleotideIndex - nucleotide1.props.nucleotideIndex);
+            let nucleotide0 = this.props.affectedNucleotides[0];
+            let rnaMolecule = App.Component.getCurrent().state.rnaComplexes[nucleotide0.props.rnaComplexIndex].state.rnaMoleculeReferences[nucleotide0.props.rnaMoleculeIndex].current as RnaMolecule.Component;
+            let fivePrimeStartIndex = nucleotide0.props.nucleotideIndex;
+            let n = this.props.affectedNucleotides.length;
+            let i = 0;
+            let length : number = NaN;
+            for (; i < n; i++) {
+              let affectedNucleotide = this.props.affectedNucleotides[i];
+              if (affectedNucleotide.state.basePair === undefined) {
+                length = i;
+                break;
+              }
+            }
+            let threePrimeStartIndex : number = NaN;
+            if (Number.isNaN(length)) {
+              length = n >> 1;
+              // threePrimeStartIndex = this.props.affectedNucleotides[(n + 1) >> 1].props.nucleotideIndex;
+            }
+            threePrimeStartIndex = this.props.affectedNucleotides[n - 1].props.nucleotideIndex;
+            // } else {
+            //   for (; i < n; i++) {
+            //     let affectedNucleotide = this.props.affectedNucleotides[i];
+            //     if (affectedNucleotide.state.basePair !== undefined) {
+            //       threePrimeStartIndex = affectedNucleotide.props.nucleotideIndex;
+            //       break;
+            //     }
+            //   }
+            // }
+            return {
+              rnaMolecule0 : rnaMolecule,
+              fivePrimeStart : fivePrimeStartIndex + rnaMolecule.state.firstNucleotideIndex,
+              threePrimeStart : threePrimeStartIndex + rnaMolecule.state.firstNucleotideIndex,
+              length
+            };
+        }
+
+        public override render() {
+          return <>
+            <BasePairsEditor.Component
+              ref = {this.basePairsEditor}
+              multipleHelicesFlag = {false}
+              initialContiguousBasePairs = {[
+                this.state
+              ]}
+            />
+          </>
+        }
+      }
     }
   }
 
@@ -2209,7 +2316,7 @@ export namespace SelectionConstraint {
               if (basePair !== undefined && nucleotide.isGreaterIndexInBasePair()) {
                 let basePairedNucleotide = findNucleotideReferenceByIndex(rnaComplex.state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
                 let newBasePairedPosition = newPositions[polarData.displacementsAsPolarCoordinates.findIndex(displacement => displacement.nucleotide === basePairedNucleotide)];
-                nucleotide.updateBasePairJsx(newPosition, newBasePairedPosition, rnaComplex);
+                nucleotide.updateBasePairJsx(newPosition, newBasePairedPosition, basePair, rnaComplex);
               }
             });
             if (nucleotide0.isGreaterIndexInBasePair()) {

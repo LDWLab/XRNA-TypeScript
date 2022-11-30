@@ -1,4 +1,4 @@
-import { DEFAULT_STROKE_WIDTH } from "../App";
+import { App, DEFAULT_STROKE_WIDTH } from "../App";
 import { getBasePairType, Nucleotide } from "../components/Nucleotide";
 import { RnaComplex } from "../components/RnaComplex";
 import { findNucleotidePropsByIndex, insert, RnaMolecule } from "../components/RnaMolecule";
@@ -935,6 +935,33 @@ const jsonFileWriter : OutputFileWriter = (rnaComplexes : Array<RnaComplex.Compo
   });
 };
 
+const svgFileWriter : OutputFileWriter = (rnaComplexes : Array<RnaComplex.Component>) => {
+  let appState = App.Component.getCurrent().state;
+  let transformedSvgElement = (document.getElementById("transformedSvgElement") as HTMLElement).cloneNode(true) as HTMLElement;
+  let svgBoundingBox = appState.svgBoundingBox;
+  transformedSvgElement.setAttribute("transform", `scale(${Math.min(appState.parentDivWidth / svgBoundingBox.width, appState.parentDivHeight / svgBoundingBox.height)}) scale(1 -1) translate(${-svgBoundingBox.x} ${-(svgBoundingBox.y + svgBoundingBox.height)})`);
+  let output = `<svg xmlns="http://www.w3.org/2000/svg">${transformedSvgElement.outerHTML}</svg>`
+  return output;
+  // let app = App.Component.getCurrent();
+  
+
+  // let outerSvgElement = document.getElementById("outerSvgElement") as HTMLElement;
+  // outerSvgElement.setAttribute("transform", "");
+  // let coreSvgContent = document.getElementById("coreSvgContent") as HTMLElement;
+  // let bounds = coreSvgContent.getBoundingClientRect();
+  // let transformedSvgElement = document.getElementById("transformedSvgElement") as HTMLElement;
+  
+  // let transform = transformedSvgElement.getAttribute("transform") as string;
+  // let viewBox = outerSvgElement.getAttribute("viewBox") as string;
+  // // console.log(coreSvgContent);
+  // // console.log();
+  // // let svgFileContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" transform="${transform}">\n${coreSvgContent.innerHTML}\n</svg>`
+  // // console.log(svgFileContent.toString());
+  // console.log(outerSvgElement.outerHTML);
+  // return outerSvgElement.outerHTML;
+}
+
 export const outputFileWriters : Record<string, OutputFileWriter> = {
-  "json" : jsonFileWriter
+  "json" : jsonFileWriter,
+  "svg" : svgFileWriter
 };

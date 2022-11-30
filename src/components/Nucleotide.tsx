@@ -199,33 +199,32 @@ export namespace Nucleotide {
       </g>;
     }
 
-    public isGreaterIndexInBasePair() {
-      let basePair = this.state.basePair;
+    public isGreaterIndexInBasePair(basePair = this.state.basePair) {
       if (basePair === undefined) {
         throw "Undefined condition";
       }
       return basePair.rnaMoleculeIndex < this.props.rnaMoleculeIndex || (basePair.rnaMoleculeIndex === this.props.rnaMoleculeIndex && basePair.nucleotideIndex < this.props.nucleotideIndex);
     }
 
-    public updateBasePairJsxWithCurrentPositions(rnaComplex : RnaComplex.Component = App.Component.getCurrent().state.rnaComplexes[this.props.rnaComplexIndex]) : void {
-      if (this.state.basePair === undefined) {
+    public updateBasePairJsxWithCurrentPositions(basePair = this.state.basePair, rnaComplex : RnaComplex.Component = App.Component.getCurrent().state.rnaComplexes[this.props.rnaComplexIndex]) : void {
+      if (basePair === undefined) {
         return;
       }
-      const basePairNucleotide = findNucleotideReferenceByIndex(rnaComplex.state.rnaMoleculeReferences[this.state.basePair.rnaMoleculeIndex].current as RnaMolecule.Component, this.state.basePair.nucleotideIndex).reference.current as Nucleotide.Component;
-      this.updateBasePairJsx(this.state.position, basePairNucleotide.state.position, rnaComplex);
+      const basePairNucleotide = findNucleotideReferenceByIndex(rnaComplex.state.rnaMoleculeReferences[basePair.rnaMoleculeIndex].current as RnaMolecule.Component, basePair.nucleotideIndex).reference.current as Nucleotide.Component;
+      this.updateBasePairJsx(this.state.position, basePairNucleotide.state.position, basePair, rnaComplex);
     }
 
-    public updateBasePairJsx(nucleotidePosition : Vector2D, basePairedNucleotidePosition : Vector2D, rnaComplex : RnaComplex.Component = App.Component.getCurrent().state.rnaComplexes[this.props.rnaComplexIndex]) : void {
-      if (this.state.basePair === undefined) {
+    public updateBasePairJsx(nucleotidePosition : Vector2D, basePairedNucleotidePosition : Vector2D, basePair = this.state.basePair, rnaComplex : RnaComplex.Component = App.Component.getCurrent().state.rnaComplexes[this.props.rnaComplexIndex]) : void {
+      if (basePair === undefined) {
         return;
       }
       let basePairCircleRadius = (rnaComplex.state.rnaMoleculeReferences[this.props.rnaMoleculeIndex].current as RnaMolecule.Component).getBasePairCircleRadius(rnaComplex);
-      let basePairedRnaMoleculeIndex = this.state.basePair.rnaMoleculeIndex;
+      let basePairedRnaMoleculeIndex = basePair.rnaMoleculeIndex;
       if (this.props.rnaMoleculeIndex !== basePairedRnaMoleculeIndex) {
         basePairCircleRadius = (basePairCircleRadius + (rnaComplex.state.rnaMoleculeReferences[basePairedRnaMoleculeIndex].current as RnaMolecule.Component).getBasePairCircleRadius(rnaComplex)) * 0.5;
       }
       const dv = Vector2D.subtract(basePairedNucleotidePosition, nucleotidePosition);
-      switch (this.state.basePair.type) {
+      switch (basePair.type) {
         case BasePairType.CANONICAL : {
           const v0 = Vector2D.scaleUp(dv, 0.25);
           const v1 = Vector2D.scaleUp(dv, 0.75);
@@ -236,8 +235,8 @@ export namespace Nucleotide {
               y1 = {v0.y}
               x2 = {v1.x}
               y2 = {v1.y}
-              stroke = {toCSS(this.state.basePair.stroke)}
-              strokeWidth = {this.state.basePair.strokeWidth}
+              stroke = {toCSS(basePair.stroke)}
+              strokeWidth = {basePair.strokeWidth}
               pointerEvents = "none"
             />
           });
@@ -252,8 +251,8 @@ export namespace Nucleotide {
               cy = {center.y}
               r = {basePairCircleRadius}
               fill = "none"
-              stroke = {toCSS(this.state.basePair.stroke)}
-              strokeWidth = {this.state.basePair.strokeWidth}
+              stroke = {toCSS(basePair.stroke)}
+              strokeWidth = {basePair.strokeWidth}
               pointerEvents = "none"
             />
           });
@@ -267,9 +266,9 @@ export namespace Nucleotide {
               cx = {center.x}
               cy = {center.y}
               r = {basePairCircleRadius * 0.5}
-              fill = {toCSS(this.state.basePair.stroke)}
+              fill = {toCSS(basePair.stroke)}
               stroke = "none"
-              strokeWidth = {this.state.basePair.strokeWidth}
+              strokeWidth = {basePair.strokeWidth}
               pointerEvents = "none"
             />
           })

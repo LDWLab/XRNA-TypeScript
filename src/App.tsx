@@ -7,7 +7,7 @@ import { RnaMolecule } from './components/RnaMolecule';
 import { SelectionConstraint } from './components/SelectionConstraints';
 import { CHARCOAL_GRAY, Color, FOREST_GREEN, toCSS } from './data_structures/Color';
 import Vector2D from './data_structures/Vector2D';
-import { InputFileReader, inputFileReaders, jsonToRnaComplexProps, OutputFileWriter, outputFileWriters } from './io/InputUI';
+import { InputFileReader, inputFileReaders, jsonToRnaComplexProps, OutputFileWriter, outputFileWriters } from './io/InputOutputUI';
 import { Utils } from './utils/Utils';
 
 // Begin constants
@@ -65,7 +65,7 @@ namespace SvgWrapper {
               (rnaMoleculeReference.current as RnaMolecule.Component).state.nucleotideReferences.forEach((nucleotideReference : React.RefObject<Nucleotide.Component>) => {
                 let nucleotide = nucleotideReference.current as Nucleotide.Component;
                 if (nucleotide.state.basePair && nucleotide.isGreaterIndexInBasePair()) {
-                  nucleotide.updateBasePairJsxWithCurrentPositions(rnaComplex);
+                  nucleotide.updateBasePairJsxWithCurrentPositions(nucleotide.state.basePair, rnaComplex);
                 }
               })
             });
@@ -588,6 +588,8 @@ export namespace App {
             </button>
           </DivWithResizeDetector>
           <svg
+            id = "outerSvgElement"
+            xmlns="http://www.w3.org/2000/svg"
             style = {{
               top : this.state.toolsDivHeight,
               left : 0,
@@ -660,12 +662,17 @@ export namespace App {
             }}
             />
             <g
+              id = "transformedSvgElement"
               ref = {svgContentReference}
               transform = {`scale(${this.state.zoom * Math.min(this.state.parentDivWidth / this.state.svgBoundingBox.width, this.state.svgHeight / this.state.svgBoundingBox.height)}) scale(1 -1) translate(${-this.state.svgBoundingBox.x + this.state.viewX} ${-(this.state.svgBoundingBox.y + this.state.svgBoundingBox.height) + this.state.viewY})`}
               onContextMenu = {(event) => event.preventDefault()}
             >
               {this.state.visualizationElements}
-              {this.state.svgWrapper}
+              <g
+                id = "coreSvgContent"
+              >
+                {this.state.svgWrapper}
+              </g>
             </g>
             <g
               transform = {`translate(0 ${this.state.svgHeight - this.state.mouseOverTextDimensions.height})`}
@@ -700,8 +707,9 @@ export namespace App {
           params[nameVal[0]] = nameVal[1];
         }
       }
-      if ("r2dt_job_id" in params) {
-        let promise = fetch(`https://www.ebi.ac.uk/Tools/services/rest/r2dt/result/r2dt-${params["r2dt_job_id"]}/json`, {
+      let r2dt_key = "r2dt_job_id";
+      if (r2dt_key in params) {
+        let promise = fetch(`https://www.ebi.ac.uk/Tools/services/rest/r2dt/result/${params[r2dt_key]}/json`, {
           method : "GET"
         });
         promise.then(data => {
