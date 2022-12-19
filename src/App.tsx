@@ -14,7 +14,7 @@ import { Utils } from './utils/Utils';
 export const DEFAULT_STROKE_WIDTH = 0.2;
 export const FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT = 2;
 export const DEFAULT_BACKGROUND_COLOR : Color = CHARCOAL_GRAY;
-export const DEFAULT_BACKGROUND_COLOR_CSS_STRING : string = toCSS(CHARCOAL_GRAY);
+export const DEFAULT_BACKGROUND_COLOR_CSS_STRING : string = toCSS(DEFAULT_BACKGROUND_COLOR);
 export const FORREST_GREEN_CSS_STRING : string = toCSS(FOREST_GREEN);
 const ZOOM_BASE = 1.1;
 const ZOOM_STEP = Math.pow(10, -FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT);
@@ -300,7 +300,7 @@ export namespace App {
             Output:&nbsp;
             <input
               type = "text"
-              placeholder = "file_name"
+              placeholder = "output file name"
               value = {this.state.outputFileName}
               onChange = {(event : React.ChangeEvent<HTMLInputElement>) => {
                 this.setState({

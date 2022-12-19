@@ -27,8 +27,29 @@ div {
   background-color : inherit;
 }
 
+td {
+  background-color : inherit;
+}
+
+tr {
+  background-color : inherit;
+}
+
+tbody {
+  background-color : inherit;
+}
+
+table {
+  background-color : inherit;
+}
+
 text {
   -webkit-user-select : none;
   -ms-user-select: none;
   user-select: none;
 }
+
+/* button:disabled, button[disabled] {
+  background-color : rgb(139, 0, 0);
+  color : black;
+} */
