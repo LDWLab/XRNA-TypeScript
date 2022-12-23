@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/XRNA-TypeScript/static/css/main.f5cbd101.css",
-    "main.js": "/XRNA-TypeScript/static/js/main.6246737a.js",
+    "main.js": "/XRNA-TypeScript/static/js/main.cb95bb3e.js",
     "static/js/787.bb6a1175.chunk.js": "/XRNA-TypeScript/static/js/787.bb6a1175.chunk.js",
     "index.html": "/XRNA-TypeScript/index.html",
     "main.f5cbd101.css.map": "/XRNA-TypeScript/static/css/main.f5cbd101.css.map",
-    "main.6246737a.js.map": "/XRNA-TypeScript/static/js/main.6246737a.js.map",
+    "main.cb95bb3e.js.map": "/XRNA-TypeScript/static/js/main.cb95bb3e.js.map",
     "787.bb6a1175.chunk.js.map": "/XRNA-TypeScript/static/js/787.bb6a1175.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.f5cbd101.css",
-    "static/js/main.6246737a.js"
+    "static/js/main.cb95bb3e.js"
   ]
 }
