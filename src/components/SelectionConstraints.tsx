@@ -1113,7 +1113,7 @@ export namespace SelectionConstraint {
   }
 
   type FormatTabState = {
-    contiguousBasePairsProps : Array<ContiguousBasePairs.PartialProps>
+    contiguousBasePairsProps : Array<ContiguousBasePairs.ExternalProps>
   };
 
   abstract class FormatTabComponent<Props extends SelectionConstraintProps, State extends FormatTabState> extends SelectionConstraintComponent<Props, State> {
@@ -1127,7 +1127,7 @@ export namespace SelectionConstraint {
       let newState = this.getInitialState();
       this.setState(newState);
       (this.basePairsEditor.current as BasePairsEditor.Component).setState({
-        contiguousBasePairProps : [
+        contiguousBasePairsProps : [
           ...newState.contiguousBasePairsProps
         ]
       });
@@ -1492,7 +1492,6 @@ export namespace SelectionConstraint {
             <br/>
             <BasePairsEditor.Component
               ref = {this.basePairsEditor}
-              multipleHelicesFlag = {true}
               rnaComplex = {this.state.rnaComplex}
               initialContiguousBasePairsProps = {[
               ]}
@@ -1923,7 +1922,6 @@ export namespace SelectionConstraint {
           return <>
             <BasePairsEditor.Component
               ref = {this.basePairsEditor}
-              multipleHelicesFlag = {true}
               rnaComplex = {this.state.rnaComplex}
               initialContiguousBasePairsProps = {[
               ]}

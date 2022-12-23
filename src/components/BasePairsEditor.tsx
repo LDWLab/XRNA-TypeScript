@@ -1,81 +1,497 @@
 import React from "react";
-import { DEFAULT_BACKGROUND_COLOR_CSS_STRING, DEFAULT_STROKE_WIDTH, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
-import '../App.css';
+import { DEFAULT_STROKE_WIDTH, FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT } from "../App";
 import { BLACK } from "../data_structures/Color";
 import Vector2D from "../data_structures/Vector2D";
-import { getBasePairType, Nucleotide } from "./Nucleotide";
+import { Nucleotide, getBasePairType } from "./Nucleotide";
 import { RnaComplex } from "./RnaComplex";
 import { RnaMolecule } from "./RnaMolecule";
 
+const tableColumnWidth = "100px";
+const tableStyle = {
+  border : "1px solid",
+  width : tableColumnWidth
+};
+const fivePrimeRnaMoleculeLabel = "5' RNA Molecule";
+const threePrimeRnaMoleculeLabel = "3' RNA Molecule";
+const nucleotideIndexLabel = "Nucleotide Index";
+const lengthLabel = "Length";
+const mismatchBasePairDistance = 10;
+const wobbleBasePairDistance = 15;
+const canonicalBasePairDistance = 20;
+
 export namespace BasePairsEditor {
   export type Props = {
-    multipleHelicesFlag : boolean,
     rnaComplex : RnaComplex.Component,
-    initialContiguousBasePairsProps : Array<ContiguousBasePairs.PartialProps>
+    initialContiguousBasePairsProps : Array<ContiguousBasePairs.Props>
   };
 
-  export type State = ContiguousBasePairs.OptionalProps & {
-    contiguousBasePairProps : Array<ContiguousBasePairs.PartialProps>,
-    disableAddHelixFlag : boolean,
-    fivePrimeSelectValue : number,
-    threePrimeSelectValue : number,
-    fivePrimeNucleotideIndexAsText : string,
-    threePrimeNucleotideIndexAsText : string,
-    lengthAsText : string
+  export type State = {
+    inputFivePrimeRnaMoleculeIndex : number,
+    inputFivePrimeNucleotideIndex : number | undefined,
+    inputFivePrimeNucleotideIndexAsText : string,
+    inputThreePrimeRnaMoleculeIndex : number,
+    inputThreePrimeNucleotideIndex : number | undefined,
+    inputThreePrimeNucleotideIndexAsText : string,
+    inputLength : number | undefined,
+    inputLengthAsText : string,
+    contiguousBasePairsProps : Array<ContiguousBasePairs.ExternalProps>,
+    disableAddFlag : boolean,
+    repositionNucleotidesOnUpdateFlag : boolean,
+    mismatchBasePairDistance : number,
+    mismatchBasePairDistanceAsText : string,
+    wobbleBasePairDistance : number,
+    wobbleBasePairDistanceAsText : string,
+    canonicalBasePairDistance : number,
+    canonicalBasePairDistanceAsText : string
   };
 
   export class Component extends React.Component<Props, State> {
-    private readonly fivePrimeSelect = React.createRef<HTMLSelectElement>();
-    private readonly threePrimeSelect = React.createRef<HTMLSelectElement>();
-
     public constructor(props : Props) {
       super(props);
       this.state = {
-        contiguousBasePairProps : [
-          ...props.initialContiguousBasePairsProps
-        ],
-        disableAddHelixFlag : true,
-        fivePrimeSelectValue : -1,
-        threePrimeSelectValue : -1,
-        fivePrimeNucleotideIndexAsText : "",
-        threePrimeNucleotideIndexAsText : "",
-        lengthAsText : ""
+        inputFivePrimeRnaMoleculeIndex : -1,
+        inputFivePrimeNucleotideIndex : undefined,
+        inputFivePrimeNucleotideIndexAsText : "",
+        inputThreePrimeRnaMoleculeIndex : -1,
+        inputThreePrimeNucleotideIndex : undefined,
+        inputThreePrimeNucleotideIndexAsText : "",
+        inputLength : undefined,
+        inputLengthAsText : "",
+        contiguousBasePairsProps : [],
+        disableAddFlag : true,
+        repositionNucleotidesOnUpdateFlag : false,
+        mismatchBasePairDistance : mismatchBasePairDistance,
+        mismatchBasePairDistanceAsText : mismatchBasePairDistance.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+        wobbleBasePairDistance : wobbleBasePairDistance,
+        wobbleBasePairDistanceAsText : wobbleBasePairDistance.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
+        canonicalBasePairDistance : canonicalBasePairDistance,
+        canonicalBasePairDistanceAsText : canonicalBasePairDistance.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
       };
     }
 
-    private updateDisableButtonFlag(
-      fivePrimeSelectValue = this.state.fivePrimeSelectValue,
-      threePrimeSelectValue = this.state.threePrimeSelectValue,
-      fivePrimeNucleotideIndex = this.state.fivePrimeNucleotideIndex,
-      threePrimeNucleotideIndex = this.state.threePrimeNucleotideIndex,
-      length = this.state.length
-    ) {
-      this.setState({
-        disableAddHelixFlag : (
-          fivePrimeSelectValue === -1 ||
-          threePrimeSelectValue === -1 ||
-          fivePrimeNucleotideIndex === undefined ||
-          threePrimeNucleotideIndex === undefined ||
-          length === undefined
-        )
-      });
+    public override render() {
+      return <>
+        <table
+          style = {{
+            ...tableStyle,
+            borderCollapse : "collapse"
+          }}
+        >
+          <tbody>
+            {/* Label Row */}
+            <tr
+              style = {tableStyle}
+            >
+              <th
+                style = {tableStyle}
+              >
+                {fivePrimeRnaMoleculeLabel}
+              </th>
+              <th
+              style = {tableStyle}
+              >
+                {nucleotideIndexLabel}
+              </th>
+              <th
+                style = {tableStyle}
+              >
+                {threePrimeRnaMoleculeLabel}
+              </th>
+              <th
+                style = {tableStyle}
+              >
+                {nucleotideIndexLabel}
+              </th>
+              <th
+                style = {tableStyle}
+              >
+                {lengthLabel}
+              </th>
+              <th
+                style = {tableStyle}
+              >
+                Modify
+              </th>
+            </tr>
+
+            {/* Display Rows */}
+            {this.state.contiguousBasePairsProps.map((externalProps : ContiguousBasePairs.ExternalProps, index : number) => <ContiguousBasePairs.Component
+              key = {index}
+              rnaComplex = {this.props.rnaComplex}
+              updateCache = {{
+                ...externalProps
+              }}
+              createBasePairs = {(createProps : ContiguousBasePairs.ExternalProps, deleteProps : ContiguousBasePairs.ExternalProps) => {
+                this.deleteBasePairs(
+                  deleteProps.fivePrimeRnaMoleculeIndex,
+                  deleteProps.threePrimeRnaMoleculeIndex,
+                  deleteProps.fivePrimeNucleotideIndex,
+                  deleteProps.threePrimeNucleotideIndex,
+                  deleteProps.length
+                );
+                this.createBasePairs(
+                  createProps.fivePrimeRnaMoleculeIndex,
+                  createProps.threePrimeRnaMoleculeIndex,
+                  createProps.fivePrimeNucleotideIndex,
+                  createProps.threePrimeNucleotideIndex,
+                  createProps.length
+                );
+              }}
+              deleteBasePairs = {(deleteProps : ContiguousBasePairs.ExternalProps) => {
+                this.setState((previousState) => ({
+                  contiguousBasePairsProps : previousState.contiguousBasePairsProps.filter((_ : ContiguousBasePairs.ExternalProps, externalPropsIndex : number) => externalPropsIndex != index)
+                }));
+                this.deleteBasePairs(
+                  deleteProps.fivePrimeRnaMoleculeIndex,
+                  deleteProps.threePrimeRnaMoleculeIndex,
+                  deleteProps.fivePrimeNucleotideIndex,
+                  deleteProps.threePrimeNucleotideIndex,
+                  deleteProps.length
+                );
+              }}
+              updatePropsHelper = {(partialProps : Partial<ContiguousBasePairs.ExternalProps>) => {
+                this.setState((previousState : State) => {
+                  let props = [...previousState.contiguousBasePairsProps];
+                  props[index] = Object.assign({}, props[index], partialProps);
+                  return {
+                    contiguousBasePairsProps : props
+                  };
+                });
+              }}
+              {...externalProps}
+            />)}
+
+            {/* Input Row */}
+            <tr
+              style = {tableStyle}
+            >
+              {/* 5' RNA Molecule */}
+              <td
+                style = {tableStyle}
+              >
+                <select
+                  style = {{
+                    width : tableColumnWidth
+                  }}
+                  value = {this.state.inputFivePrimeRnaMoleculeIndex}
+                  onChange = {e => {
+                    let newInputFivePrimeRnaMoleculeIndex = Number.parseInt(e.target.value);
+                    this.setState({
+                      inputFivePrimeRnaMoleculeIndex : newInputFivePrimeRnaMoleculeIndex
+                    });
+                    this.updateDisableAddFlag(
+                      newInputFivePrimeRnaMoleculeIndex,
+                      this.state.inputFivePrimeNucleotideIndex,
+                      this.state.inputThreePrimeRnaMoleculeIndex,
+                      this.state.inputThreePrimeNucleotideIndex,
+                      this.state.inputLength
+                    );
+                  }}
+                >
+                  <option
+                    value = {-1}
+                    style = {{
+                      display : "none"
+                    }}
+                  >
+                    {fivePrimeRnaMoleculeLabel}
+                  </option>
+                  {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>, index : number) => {
+                    let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
+                    return <option
+                      key = {index}
+                      value = {index}
+                    >
+                      {rnaMolecule.state.name}
+                    </option>
+                  })}
+                </select>
+              </td>
+              {/* 5' Nucleotide Index */}
+              <td
+                style = {tableStyle}
+              >
+                <input
+                  style = {{
+                    width : tableColumnWidth
+                  }}
+                  placeholder = {nucleotideIndexLabel}
+                  type = "number"
+                  value = {this.state.inputFivePrimeNucleotideIndexAsText}
+                  onChange = {e => {
+                    this.setState({
+                      inputFivePrimeNucleotideIndexAsText : e.target.value
+                    });
+                    let newFivePrimeNucleotideIndex = Number.parseInt(e.target.value);
+                    if (Number.isNaN(newFivePrimeNucleotideIndex)) {
+                      return;
+                    }
+                    this.setState({
+                      inputFivePrimeNucleotideIndex : newFivePrimeNucleotideIndex
+                    });
+                    this.updateDisableAddFlag(
+                      this.state.inputFivePrimeRnaMoleculeIndex,
+                      newFivePrimeNucleotideIndex,
+                      this.state.inputThreePrimeRnaMoleculeIndex,
+                      this.state.inputThreePrimeNucleotideIndex,
+                      this.state.inputLength
+                    );
+                  }}
+                />
+              </td>
+              {/* 3' RNA Molecule */}
+              <td
+                style = {tableStyle}
+              >
+                <select
+                  style = {{
+                    width : tableColumnWidth
+                  }}
+                  value = {this.state.inputThreePrimeRnaMoleculeIndex}
+                  onChange = {e => {
+                    let newInputThreePrimeRnaMoleculeIndex = Number.parseInt(e.target.value);
+                    this.setState({
+                      inputThreePrimeRnaMoleculeIndex : newInputThreePrimeRnaMoleculeIndex
+                    });
+                    this.updateDisableAddFlag(
+                      this.state.inputFivePrimeRnaMoleculeIndex,
+                      this.state.inputFivePrimeNucleotideIndex,
+                      newInputThreePrimeRnaMoleculeIndex,
+                      this.state.inputThreePrimeNucleotideIndex,
+                      this.state.inputLength
+                    );
+                  }}
+                >
+                  <option
+                    value = {-1}
+                    style = {{
+                      display : "none"
+                    }}
+                  >
+                    {threePrimeRnaMoleculeLabel}
+                  </option>
+                  {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>, index : number) => {
+                    let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
+                    return <option
+                      key = {index}
+                      value = {index}
+                    >
+                      {rnaMolecule.state.name}
+                    </option>
+                  })}
+                </select>
+              </td>
+              {/* 3' Nucleotide Index */}
+              <td
+                style = {tableStyle}
+              >
+                <input
+                  style = {{
+                    width : tableColumnWidth
+                  }}
+                  placeholder = {nucleotideIndexLabel}
+                  type = "number"
+                  value = {this.state.inputThreePrimeNucleotideIndexAsText}
+                  onChange = {e => {
+                    this.setState({
+                      inputThreePrimeNucleotideIndexAsText : e.target.value
+                    });
+                    let newThreePrimeNucleotideIndex = Number.parseInt(e.target.value);
+                    if (Number.isNaN(newThreePrimeNucleotideIndex)) {
+                      return;
+                    }
+                    this.setState({
+                      inputThreePrimeNucleotideIndex : newThreePrimeNucleotideIndex
+                    });
+                    this.updateDisableAddFlag(
+                      this.state.inputFivePrimeRnaMoleculeIndex,
+                      this.state.inputFivePrimeNucleotideIndex,
+                      this.state.inputThreePrimeRnaMoleculeIndex,
+                      newThreePrimeNucleotideIndex,
+                      this.state.inputLength
+                    );
+                  }}
+                />
+              </td>
+              {/* Length */}
+              <td
+                style = {tableStyle}
+              >
+                <input
+                  style = {{
+                    width : tableColumnWidth
+                  }}
+                  placeholder = {lengthLabel}
+                  type = "number"
+                  value = {this.state.inputLengthAsText}
+                  onChange = {e => {
+                    this.setState({
+                      inputLengthAsText : e.target.value
+                    });
+                    let newLength = Number.parseInt(e.target.value);
+                    if (Number.isNaN(newLength)) {
+                      return;
+                    }
+                    this.setState({
+                      inputLength : newLength
+                    });
+                    this.updateDisableAddFlag(
+                      this.state.inputFivePrimeRnaMoleculeIndex,
+                      this.state.inputFivePrimeNucleotideIndex,
+                      this.state.inputThreePrimeRnaMoleculeIndex,
+                      this.state.inputThreePrimeNucleotideIndex,
+                      newLength
+                    );
+                  }}
+                />
+              </td>
+              {/* Modify */}
+              <td
+                style = {tableStyle}
+              >
+                <button
+                  disabled = {this.state.disableAddFlag}
+                  style = {{
+                    width : tableColumnWidth,
+                    backgroundColor : this.state.disableAddFlag ? "rgb(129, 0, 0)" : "inherit"
+                  }}
+                  onClick = {() => {
+                    this.deleteBasePairs(
+                      this.state.inputFivePrimeRnaMoleculeIndex,
+                      this.state.inputThreePrimeRnaMoleculeIndex,
+                      this.state.inputFivePrimeNucleotideIndex as number,
+                      this.state.inputThreePrimeNucleotideIndex as number,
+                      this.state.inputLength as number
+                    );
+                    this.createBasePairs(
+                      this.state.inputFivePrimeRnaMoleculeIndex,
+                      this.state.inputThreePrimeRnaMoleculeIndex,
+                      this.state.inputFivePrimeNucleotideIndex as number,
+                      this.state.inputThreePrimeNucleotideIndex as number,
+                      this.state.inputLength as number
+                    );
+                    this.setState((oldState : State) => ({
+                      inputFivePrimeRnaMoleculeIndex : -1,
+                      inputFivePrimeNucleotideIndex : undefined,
+                      inputFivePrimeNucleotideIndexAsText : "",
+                      inputThreePrimeRnaMoleculeIndex : -1,
+                      inputThreePrimeNucleotideIndex : undefined,
+                      inputThreePrimeNucleotideIndexAsText : "",
+                      inputLength : undefined,
+                      inputLengthAsText : "",
+                      disableAddFlag : true,
+                      contiguousBasePairsProps : [
+                        ...oldState.contiguousBasePairsProps,
+                        {
+                          fivePrimeRnaMoleculeIndex : this.state.inputFivePrimeRnaMoleculeIndex,
+                          fivePrimeNucleotideIndex : this.state.inputFivePrimeNucleotideIndex as number,
+                          threePrimeRnaMoleculeIndex : this.state.inputThreePrimeRnaMoleculeIndex,
+                          threePrimeNucleotideIndex : this.state.inputThreePrimeNucleotideIndex as number,
+                          length : this.state.inputLength as number
+                        }
+                      ]
+                    }));
+                  }}
+                >
+                  Add
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <label>
+          Reposition nucleotides on update:&nbsp;
+          <input
+            type = "checkbox"
+            checked = {this.state.repositionNucleotidesOnUpdateFlag}
+            onChange = {() => {
+              this.setState({
+                repositionNucleotidesOnUpdateFlag : !this.state.repositionNucleotidesOnUpdateFlag
+              })
+            }}
+          /> 
+        </label>
+        <br/>
+        {this.state.repositionNucleotidesOnUpdateFlag && <>
+          <label>
+            Mismatch base-pair distance:&nbsp;
+            <input
+              type = "number"
+              value = {this.state.mismatchBasePairDistanceAsText}
+              onChange = {e => {
+                let newMismatchBasePairDistance = Number.parseFloat(e.target.value);
+                this.setState({
+                  mismatchBasePairDistanceAsText : e.target.value
+                });
+                if (Number.isNaN(newMismatchBasePairDistance)) {
+                  return;
+                }
+                this.setState({
+                  mismatchBasePairDistance : newMismatchBasePairDistance
+                });
+              }}
+            />
+          </label>
+          <br/>
+          <label>
+            Wobble base-pair distance:&nbsp;
+            <input
+              type = "number"
+              value = {this.state.wobbleBasePairDistanceAsText}
+              onChange = {e => {
+                let newWobbleBasePairDistance = Number.parseFloat(e.target.value);
+                this.setState({
+                  wobbleBasePairDistanceAsText : e.target.value
+                });
+                if (Number.isNaN(newWobbleBasePairDistance)) {
+                  return;
+                }
+                this.setState({
+                  wobbleBasePairDistance : newWobbleBasePairDistance
+                })
+              }}
+            />
+          </label>
+          <br/>
+          <label>
+            Canonical base-pair distance:&nbsp;
+            <input
+              type = "number"
+              value = {this.state.canonicalBasePairDistanceAsText}
+              onChange = {e => {
+                let newCanonicalBasePairDistance = Number.parseFloat(e.target.value);
+                this.setState({
+                  canonicalBasePairDistanceAsText : e.target.value
+                });
+                if (Number.isNaN(newCanonicalBasePairDistance)) {
+                  return;
+                }
+                this.setState({
+                  canonicalBasePairDistance : newCanonicalBasePairDistance
+                });
+              }}
+            />
+          </label>
+        </>}
+      </>
     }
 
-    private removeHelix(indexToRemove : number) : void {
-      let toBeRemoved = this.state.contiguousBasePairProps[indexToRemove];
-      this.deleteBasePairs(
-        toBeRemoved.fivePrimeRnaMoleculeIndex,
-        toBeRemoved.threePrimeRnaMoleculeIndex,
-        toBeRemoved.fivePrimeNucleotideIndex,
-        toBeRemoved.threePrimeNucleotideIndex,
-        toBeRemoved.length
-      );
-      this.setState((previousState : State) => {
-        let filtered = previousState.contiguousBasePairProps.filter((_ : ContiguousBasePairs.PartialProps, index : number) => indexToRemove !== index);
-        return {
-          contiguousBasePairProps : filtered
-        }
-      });
+    private updateDisableAddFlag(
+      inputFivePrimeRnaMoleculeIndex : number,
+      inputFivePrimeNucleotideIndex : number | undefined,
+      inputThreePrimeRnaMoleculeIndex : number,
+      inputThreePrimeNucleotideIndex : number | undefined,
+      inputLength : number | undefined
+    ) {
+      this.setState({
+        disableAddFlag : (
+          inputFivePrimeRnaMoleculeIndex == -1 ||
+          inputFivePrimeNucleotideIndex == undefined ||
+          inputThreePrimeRnaMoleculeIndex == -1 ||
+          inputThreePrimeNucleotideIndex == undefined ||
+          inputLength == undefined
+        )
+      })
     }
 
     private deleteBasePairs(
@@ -125,13 +541,6 @@ export namespace BasePairsEditor {
       threePrimeNucleotideIndex : number,
       length : number
     ) : void {
-      this.deleteBasePairs(
-        fivePrimeRnaMoleculeIndex,
-        threePrimeRnaMoleculeIndex,
-        fivePrimeNucleotideIndex,
-        threePrimeNucleotideIndex,
-        length
-      );
       let fivePrimeRnaMolecule = this.props.rnaComplex.state.rnaMoleculeReferences[fivePrimeRnaMoleculeIndex].current as RnaMolecule.Component;
       let threePrimeRnaMolecule = this.props.rnaComplex.state.rnaMoleculeReferences[threePrimeRnaMoleculeIndex].current as RnaMolecule.Component;
       let normalizedFivePrimeNucleotideIndex = fivePrimeNucleotideIndex - fivePrimeRnaMolecule.state.firstNucleotideIndex;
@@ -142,8 +551,6 @@ export namespace BasePairsEditor {
       let axis : Vector2D = Vector2D.normalize(Vector2D.subtract(normalizedFivePrimeNucleotide.state.position, runningCenter));
       let orthogonalAxis = Vector2D.negate(Vector2D.orthogonalize(axis));
       let distanceBetweenBasePairs = 6;
-      let basePairLength = 20;
-      let scaledAxis = Vector2D.scaleUp(axis, basePairLength * 0.5);
       for (let i = 0; i < length; i++) {
         // Form current base pairs.
         let currentFivePrimeNucleotideIndex = normalizedFivePrimeNucleotideIndex + i;
@@ -175,15 +582,36 @@ export namespace BasePairsEditor {
         let fivePrimeNucleotidePosition = fivePrimeNucleotide.state.position;
         let threePrimeNucleotidePosition = threePrimeNucleotide.state.position;
 
-        fivePrimeNucleotidePosition = Vector2D.add(runningCenter, scaledAxis);
-        threePrimeNucleotidePosition = Vector2D.subtract(runningCenter, scaledAxis);
-        fivePrimeNucleotide.setState({
-          position : fivePrimeNucleotidePosition
-        });
-        threePrimeNucleotide.setState({
-          position : threePrimeNucleotidePosition
-        })
-        runningCenter = Vector2D.add(runningCenter, Vector2D.scaleUp(orthogonalAxis, distanceBetweenBasePairs));
+        if (this.state.repositionNucleotidesOnUpdateFlag) {
+          let basePairLength = undefined;
+          switch (basePairType) {
+            case Nucleotide.BasePairType.MISMATCH : {
+              basePairLength = this.state.mismatchBasePairDistance;
+              break;
+            }
+            case Nucleotide.BasePairType.WOBBLE : {
+              basePairLength = this.state.wobbleBasePairDistance;
+              break;
+            }
+            case Nucleotide.BasePairType.CANONICAL : {
+              basePairLength = this.state.canonicalBasePairDistance;
+              break;
+            }
+            default : {
+              throw new Error("Unrecognized basepair type.");
+            }
+          }
+          let scaledAxis = Vector2D.scaleUp(axis, basePairLength * 0.5);
+          fivePrimeNucleotidePosition = Vector2D.add(runningCenter, scaledAxis);
+          threePrimeNucleotidePosition = Vector2D.subtract(runningCenter, scaledAxis);
+          fivePrimeNucleotide.setState({
+            position : fivePrimeNucleotidePosition
+          });
+          threePrimeNucleotide.setState({
+            position : threePrimeNucleotidePosition
+          })
+          runningCenter = Vector2D.add(runningCenter, Vector2D.scaleUp(orthogonalAxis, distanceBetweenBasePairs));
+        }
 
         if (fivePrimeNucleotide.isGreaterIndexInBasePair(newFivePrimeBasePair)) {
           fivePrimeNucleotide.updateBasePairJsx(
@@ -200,330 +628,30 @@ export namespace BasePairsEditor {
         }
       }
     }
-
-    public override render() {
-      let fivePrimeNucleotidePlaceholderText = "Nucleotide #";
-      let threePrimeNucleotidePlaceholderText = "Nucleotide #";
-      if (!this.props.multipleHelicesFlag) {
-        fivePrimeNucleotidePlaceholderText = "5' " + fivePrimeNucleotidePlaceholderText;
-        threePrimeNucleotidePlaceholderText = "3' " + threePrimeNucleotidePlaceholderText;
-      }
-      let helixLengthPlaceholderText = "Helix length"
-      return <>
-        <table
-          style = {{
-            ...tableStyle,
-            borderCollapse : "collapse"
-          }}
-        >
-          <tbody>
-            <tr>
-              {this.props.multipleHelicesFlag && <th
-                style = {tableStyle}
-              >
-                5' RNA Molecule
-              </th>}
-              <th
-                style = {tableStyle}
-              >
-                {fivePrimeNucleotidePlaceholderText}
-              </th>
-              {this.props.multipleHelicesFlag && <th
-                style = {tableStyle}
-              >
-                3' RNA Molecule
-              </th>}
-              <th
-                style = {tableStyle}
-              >
-                {threePrimeNucleotidePlaceholderText}
-              </th>
-              <th
-                style = {tableStyle}
-              >
-                {helixLengthPlaceholderText}
-              </th>
-              <th
-                style = {tableStyle}
-              >
-                Modify
-              </th>
-            </tr>
-            
-            {this.state.contiguousBasePairProps.map((contiguousBasePairsProps : ContiguousBasePairs.PartialProps, index : number) => <ContiguousBasePairs.Component
-              key = {index}
-              {...contiguousBasePairsProps}
-              rnaComplex = {this.props.rnaComplex}
-              fivePrimeNucleotidePlaceholderText = {fivePrimeNucleotidePlaceholderText}
-              threePrimeNucleotidePlaceholderText = {threePrimeNucleotidePlaceholderText}
-              helixLengthPlaceholderText = {helixLengthPlaceholderText}
-              index = {index}
-              removeHelix = {(index : number) => this.removeHelix(index)}
-              createBasePairs = {(fivePrimeRnaMoleculeIndex : number, threePrimeRnaMoleculeIndex : number, fivePrimeNucleotideIndex : number, threePrimeNucleotideIndex : number, length : number) => this.createBasePairs(fivePrimeRnaMoleculeIndex, threePrimeRnaMoleculeIndex, fivePrimeNucleotideIndex, threePrimeNucleotideIndex, length)}
-              deleteBasePairs = {(fivePrimeRnaMoleculeIndex : number, threePrimeRnaMoleculeIndex : number, fivePrimeNucleotideIndex : number, threePrimeNucleotideIndex : number, length : number) => this.deleteBasePairs(fivePrimeRnaMoleculeIndex, threePrimeRnaMoleculeIndex, fivePrimeNucleotideIndex, threePrimeNucleotideIndex, length)}
-            />)}
-            
-            {/* To-be-added helix row */}
-            <tr
-              style = {tableStyle}
-            >
-              <td
-                style = {tableStyle}
-              >
-                {this.props.multipleHelicesFlag && <>
-                  <select
-                    ref = {this.fivePrimeSelect}
-                    value = {this.state.fivePrimeSelectValue}
-                    onChange = {e => {
-                      let newFivePrimeSelectValue = Number.parseInt(e.target.value);
-                      this.setState({
-                        fivePrimeSelectValue : newFivePrimeSelectValue
-                      });
-                      this.updateDisableButtonFlag(
-                        newFivePrimeSelectValue,
-                        this.state.threePrimeSelectValue,
-                        this.state.fivePrimeNucleotideIndex,
-                        this.state.threePrimeNucleotideIndex,
-                        this.state.length
-                      );
-                    }}
-                  >
-                    <option
-                      style = {{
-                        display : "none"
-                      }}
-                      value = {-1}
-                    >
-                      5' RNA molecule
-                    </option>
-                    {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMolecule : React.RefObject<RnaMolecule.Component>, index : number) => <option
-                      value = {index}
-                      key = {index}
-                    >
-                      {(rnaMolecule.current as RnaMolecule.Component).state.name}
-                    </option>)}
-                  </select>
-                </>}
-              </td>
-              <td
-                style = {tableStyle}
-              >
-                <input
-                  style = {{
-                    width : tableColumnWidth
-                  }}
-                  type = "number"
-                  placeholder = {fivePrimeNucleotidePlaceholderText}
-                  value = {this.state.fivePrimeNucleotideIndexAsText}
-                  onChange = {e => {
-                    let newFivePrimeNucleotideIndex = Number.parseInt(e.target.value);
-                    this.setState({
-                      fivePrimeNucleotideIndexAsText : e.target.value
-                    });
-                    if (Number.isNaN(newFivePrimeNucleotideIndex)) {
-                      return;
-                    }
-                    this.setState({
-                      fivePrimeNucleotideIndex : newFivePrimeNucleotideIndex
-                    });
-                    this.updateDisableButtonFlag(
-                      this.state.fivePrimeSelectValue,
-                      this.state.threePrimeSelectValue,
-                      newFivePrimeNucleotideIndex,
-                      this.state.threePrimeNucleotideIndex,
-                      this.state.length
-                    );
-                  }}
-                />
-              </td>
-              <td
-                style = {tableStyle}
-              >
-                <select
-                  ref = {this.threePrimeSelect}
-                  value = {this.state.threePrimeSelectValue}
-                  onChange = {e => {
-                    let newThreePrimeSelectValue = Number.parseInt(e.target.value);
-                    this.setState({
-                      threePrimeSelectValue : newThreePrimeSelectValue
-                    });
-                    this.updateDisableButtonFlag(
-                      this.state.fivePrimeSelectValue,
-                      newThreePrimeSelectValue,
-                      this.state.fivePrimeNucleotideIndex,
-                      this.state.threePrimeNucleotideIndex,
-                      this.state.length
-                    );
-                  }}
-                >
-                  <option
-                    style = {{
-                      display : "none"
-                    }}
-                    value = {-1}
-                  >
-                    3' RNA molecule
-                  </option>
-                  {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMolecule : React.RefObject<RnaMolecule.Component>, index : number) => <option
-                    style = {{
-                      backgroundColor : "inherit"
-                    }}
-                    value = {index}
-                    key = {index}
-                  >
-                    {(rnaMolecule.current as RnaMolecule.Component).state.name}
-                  </option>)}
-                </select>
-              </td>
-              <td
-                style = {tableStyle}
-              >
-                <input
-                  style = {{
-                    width : tableColumnWidth
-                  }}
-                  type = "number"
-                  placeholder = {threePrimeNucleotidePlaceholderText}
-                  value = {this.state.threePrimeNucleotideIndexAsText}
-                  onChange = {e => {
-                    let newThreePrimeNucleotideIndex = Number.parseInt(e.target.value);
-                    this.setState({
-                      threePrimeNucleotideIndexAsText : e.target.value
-                    });
-                    if (Number.isNaN(newThreePrimeNucleotideIndex)) {
-                      return;
-                    }
-                    this.setState({
-                      threePrimeNucleotideIndex : newThreePrimeNucleotideIndex
-                    });
-                    this.updateDisableButtonFlag(
-                      this.state.fivePrimeSelectValue,
-                      this.state.threePrimeSelectValue,
-                      this.state.fivePrimeNucleotideIndex,
-                      newThreePrimeNucleotideIndex,
-                      this.state.length
-                    );
-                  }}
-                />
-              </td>
-              <td
-                style = {tableStyle}
-              >
-                <input
-                  style = {{
-                    width : tableColumnWidth
-                  }}
-                  type = "number"
-                  placeholder = {helixLengthPlaceholderText}
-                  value = {this.state.lengthAsText}
-                  onChange = {e => {
-                    let newLength = Number.parseInt(e.target.value);
-                    this.setState({
-                      lengthAsText : e.target.value
-                    });
-                    if (Number.isNaN(newLength)) {
-                      return;
-                    }
-                    this.setState({
-                      length : newLength
-                    });
-                    this.updateDisableButtonFlag(
-                      this.state.fivePrimeSelectValue,
-                      this.state.threePrimeSelectValue,
-                      this.state.fivePrimeNucleotideIndex,
-                      this.state.threePrimeNucleotideIndex,
-                      newLength
-                    );
-                  }}
-                />
-              </td>
-              <td
-                style = {tableStyle}
-              >
-                <button
-                  style = {{
-                    backgroundColor : this.state.disableAddHelixFlag ? "rgb(139, 0, 0)" : "inherit",
-                    width : tableColumnWidth
-                  }}
-                  onClick = {() => {
-                    this.deleteBasePairs(
-                      this.state.fivePrimeSelectValue,
-                      this.state.threePrimeSelectValue,
-                      this.state.fivePrimeNucleotideIndex as number,
-                      this.state.threePrimeNucleotideIndex as number,
-                      this.state.length as number
-                    );
-                    this.createBasePairs(
-                      this.state.fivePrimeSelectValue,
-                      this.state.threePrimeSelectValue,
-                      this.state.fivePrimeNucleotideIndex as number,
-                      this.state.threePrimeNucleotideIndex as number,
-                      this.state.length as number
-                    );
-                    this.setState(prevState => ({
-                      fivePrimeSelectValue : -1,
-                      threePrimeSelectValue : -1,
-                      fivePrimeNucleotideIndex : undefined,
-                      threePrimeNucleotideIndex : undefined,
-                      length : undefined,
-                      fivePrimeNucleotideIndexAsText : "",
-                      threePrimeNucleotideIndexAsText : "",
-                      lengthAsText : "",
-                      disableAddHelixFlag : true,
-                      contiguousBasePairProps : [
-                        ...prevState.contiguousBasePairProps,
-                        {
-                          fivePrimeRnaMoleculeIndex : this.state.fivePrimeSelectValue,
-                          threePrimeRnaMoleculeIndex : this.state.threePrimeSelectValue,
-                          fivePrimeNucleotideIndex : this.state.fivePrimeNucleotideIndex as number,
-                          threePrimeNucleotideIndex : this.state.threePrimeNucleotideIndex as number,
-                          length : this.state.length as number
-                        }
-                      ]
-                    }));
-                  }}
-                >
-                  Add Helix
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        {!this.props.multipleHelicesFlag && "This selection constraint supports only one helix."}
-      </>;
-    }
   }
 }
 
-const tableStyle = {
-  border : "1px solid"
-};
-
-const tableColumnWidth = "100px";
-
 export namespace ContiguousBasePairs {
-  export type PartialProps = {
+  export type ExternalProps = {
     fivePrimeRnaMoleculeIndex : number,
-    threePrimeRnaMoleculeIndex : number,
     fivePrimeNucleotideIndex : number,
+    threePrimeRnaMoleculeIndex : number,
     threePrimeNucleotideIndex : number,
     length : number
   };
 
-  export type OptionalProps = Partial<PartialProps>;
+  export type PropsFromBasePairsEditor = ExternalProps & {
+    updateCache : ExternalProps
+  }
 
-  export type Props = PartialProps & {
+  export type Props = PropsFromBasePairsEditor & {
     rnaComplex : RnaComplex.Component,
-    fivePrimeNucleotidePlaceholderText : string,
-    threePrimeNucleotidePlaceholderText : string,
-    helixLengthPlaceholderText : string,
-    index : number,
-    removeHelix : (index : number) => void,
-    createBasePairs : (fivePrimeRnaMoleculeIndex : number, threePrimeRnaMoleculeIndex : number, fivePrimeNucleotideIndex : number, threePrimeNucleotideIndex : number, length : number) => void
-    deleteBasePairs : (fivePrimeRnaMoleculeIndex : number, threePrimeRnaMoleculeIndex : number, fivePrimeNucleotideIndex : number, threePrimeNucleotideIndex : number, length : number) => void
+    createBasePairs : (createProps : ExternalProps, deleteProps : ExternalProps) => void,
+    deleteBasePairs : (deleteProps : ExternalProps) => void,
+    updatePropsHelper : (partialProps : Partial<PropsFromBasePairsEditor>) => void
   };
 
-  export type State = PartialProps & {
+  export type State = {
     fivePrimeNucleotideIndexAsText : string,
     threePrimeNucleotideIndexAsText : string,
     lengthAsText : string
@@ -533,45 +661,25 @@ export namespace ContiguousBasePairs {
     public constructor(props : Props) {
       super(props);
       this.state = {
-        fivePrimeRnaMoleculeIndex : props.fivePrimeRnaMoleculeIndex,
-        fivePrimeNucleotideIndex : props.fivePrimeNucleotideIndex,
-        threePrimeRnaMoleculeIndex : props.threePrimeRnaMoleculeIndex,
-        threePrimeNucleotideIndex : props.threePrimeNucleotideIndex,
-        length : props.length,
-        fivePrimeNucleotideIndexAsText : props.fivePrimeNucleotideIndex.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-        threePrimeNucleotideIndexAsText : props.threePrimeNucleotideIndex.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT),
-        lengthAsText : props.length.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
+        fivePrimeNucleotideIndexAsText : "" + props.fivePrimeNucleotideIndex,
+        threePrimeNucleotideIndexAsText : "" + props.threePrimeNucleotideIndex,
+        lengthAsText : "" + props.length
       };
     }
 
-    public override componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
-      if (this.props.fivePrimeRnaMoleculeIndex !== prevProps.fivePrimeRnaMoleculeIndex) {
+    public override componentDidUpdate(previousProps : Props) {
+      if (
+        this.props.fivePrimeRnaMoleculeIndex !== previousProps.fivePrimeRnaMoleculeIndex ||
+        this.props.fivePrimeNucleotideIndex !== previousProps.fivePrimeNucleotideIndex ||
+        this.props.threePrimeRnaMoleculeIndex !== previousProps.threePrimeRnaMoleculeIndex ||
+        this.props.threePrimeNucleotideIndex !== previousProps.threePrimeNucleotideIndex ||
+        this.props.length !== previousProps.length
+      ) {
         this.setState({
-          fivePrimeRnaMoleculeIndex : this.props.fivePrimeRnaMoleculeIndex
+          fivePrimeNucleotideIndexAsText : "" + this.props.fivePrimeNucleotideIndex,
+          threePrimeNucleotideIndexAsText : "" + this.props.threePrimeNucleotideIndex,
+          lengthAsText : "" + this.props.length
         });
-      }
-      if (this.props.threePrimeRnaMoleculeIndex !== prevProps.threePrimeRnaMoleculeIndex) {
-        this.setState({
-          threePrimeRnaMoleculeIndex : this.props.threePrimeRnaMoleculeIndex
-        });
-      }
-      if (this.props.fivePrimeNucleotideIndex !== prevProps.fivePrimeNucleotideIndex) {
-        this.setState({
-          fivePrimeNucleotideIndex : this.props.fivePrimeNucleotideIndex,
-          fivePrimeNucleotideIndexAsText : this.props.fivePrimeNucleotideIndex.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
-        });
-      }
-      if (this.props.threePrimeNucleotideIndex !== prevProps.threePrimeNucleotideIndex) {
-        this.setState({
-          threePrimeNucleotideIndex : this.props.threePrimeNucleotideIndex,
-          threePrimeNucleotideIndexAsText : this.props.threePrimeNucleotideIndex.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
-        });
-      }
-      if (this.props.length !== prevProps.length) {
-        this.setState({
-          length : this.props.length,
-          lengthAsText : this.props.length.toFixed(FORMATTED_NUMBER_DECIMAL_DIGITS_COUNT)
-        })
       }
     }
 
@@ -583,118 +691,27 @@ export namespace ContiguousBasePairs {
           style = {tableStyle}
         >
           <select
-            value = {this.state.fivePrimeRnaMoleculeIndex}
+            style = {{
+              width : tableColumnWidth
+            }}
+            value = {this.props.fivePrimeRnaMoleculeIndex}
             onChange = {e => {
               let newFivePrimeRnaMoleculeIndex = Number.parseInt(e.target.value);
-              this.props.deleteBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.props.createBasePairs(
-                newFivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.setState({
+              if (Number.isNaN(newFivePrimeRnaMoleculeIndex)) {
+                return;
+              }
+              this.props.updatePropsHelper({
                 fivePrimeRnaMoleculeIndex : newFivePrimeRnaMoleculeIndex
               });
             }}
           >
             <option
+              value = {-1}
               style = {{
                 display : "none"
               }}
-              value = {-1}
             >
-              5' RNA molecule
-            </option>
-            {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>, index : number) => {
-              let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
-              return <option
-                key = {index}
-                value = {index}
-              >
-                {rnaMolecule.state.name}
-              </option>;
-            })}
-          </select>
-        </td>
-        <td
-          style = {tableStyle}
-        >
-          <input
-            style = {{
-              width : tableColumnWidth
-            }}
-            type = "number"
-            placeholder = {this.props.fivePrimeNucleotidePlaceholderText}
-            value = {this.state.fivePrimeNucleotideIndexAsText}
-            onChange = {e => {
-              let newFivePrimeNucleotideIndex = Number.parseInt(e.target.value);
-              this.setState({
-                fivePrimeNucleotideIndexAsText : e.target.value
-              });
-              if (Number.isNaN(newFivePrimeNucleotideIndex)) {
-                return;
-              }
-              this.props.deleteBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.props.createBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                newFivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.setState({
-                fivePrimeNucleotideIndex : newFivePrimeNucleotideIndex
-              });
-            }}
-          />
-        </td>
-        <td
-          style = {tableStyle}
-        >
-          <select
-            value = {this.state.threePrimeRnaMoleculeIndex}
-            onChange = {e => {
-              let newThreePrimeRnaMoleculeIndex = Number.parseInt(e.target.value);
-              this.props.deleteBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.props.createBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                newThreePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.setState({
-                threePrimeRnaMoleculeIndex : newThreePrimeRnaMoleculeIndex
-              });
-            }}
-          >
-            <option
-              style = {{
-                display : "none"
-              }}
-              value = {-1}
-            >
-              3' RNA molecule
+              {fivePrimeRnaMoleculeLabel}
             </option>
             {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>, index : number) => {
               let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
@@ -714,34 +731,78 @@ export namespace ContiguousBasePairs {
             style = {{
               width : tableColumnWidth
             }}
+            placeholder = {nucleotideIndexLabel}
             type = "number"
-            placeholder = {this.props.threePrimeNucleotidePlaceholderText}
+            value = {this.state.fivePrimeNucleotideIndexAsText}
+            onChange = {e => {
+              this.setState({
+                fivePrimeNucleotideIndexAsText : e.target.value
+              });
+              let newFivePrimeNucleotideIndex = Number.parseInt(e.target.value);
+              if (Number.isNaN(newFivePrimeNucleotideIndex)) {
+                return;
+              }
+              this.props.updatePropsHelper({
+                fivePrimeNucleotideIndex : newFivePrimeNucleotideIndex
+              });
+            }}
+          />
+        </td>
+        <td
+          style = {tableStyle}
+        >
+          <select
+            style = {{
+              width : tableColumnWidth
+            }}
+            value = {this.props.threePrimeRnaMoleculeIndex}
+            onChange = {e => {
+              let newFivePrimeRnaMoleculeIndex = Number.parseInt(e.target.value);
+              this.props.updatePropsHelper({
+                fivePrimeRnaMoleculeIndex : newFivePrimeRnaMoleculeIndex
+              });
+            }}
+          >
+            <option
+              value = {-1}
+              style = {{
+                display : "none"
+              }}
+            >
+              {threePrimeRnaMoleculeLabel}
+            </option>
+            {this.props.rnaComplex.state.rnaMoleculeReferences.map((rnaMoleculeReference : React.RefObject<RnaMolecule.Component>, index : number) => {
+              let rnaMolecule = rnaMoleculeReference.current as RnaMolecule.Component;
+              return <option
+                key = {index}
+                value = {index}
+              >
+                {rnaMolecule.state.name}
+              </option>
+            })}
+          </select>
+        </td>
+        <td
+          style = {tableStyle}
+        >
+          <input
+            style = {{
+              width : tableColumnWidth
+            }}
+            placeholder = {nucleotideIndexLabel}
+            type = "number"
             value = {this.state.threePrimeNucleotideIndexAsText}
             onChange = {e => {
-              let newThreePrimeNucleotideIndex = Number.parseInt(e.target.value);
               this.setState({
                 threePrimeNucleotideIndexAsText : e.target.value
               });
+              let newThreePrimeNucleotideIndex = Number.parseInt(e.target.value);
               if (Number.isNaN(newThreePrimeNucleotideIndex)) {
                 return;
               }
-              this.props.deleteBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.props.createBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                newThreePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.setState({
+              this.props.updatePropsHelper({
                 threePrimeNucleotideIndex : newThreePrimeNucleotideIndex
-              })
+              });
             }}
           />
         </td>
@@ -752,32 +813,18 @@ export namespace ContiguousBasePairs {
             style = {{
               width : tableColumnWidth
             }}
+            placeholder = {lengthLabel}
             type = "number"
-            placeholder = {this.props.helixLengthPlaceholderText}
             value = {this.state.lengthAsText}
             onChange = {e => {
-              let newLength = Number.parseFloat(e.target.value);
               this.setState({
                 lengthAsText : e.target.value
               });
+              let newLength = Number.parseInt(e.target.value);
               if (Number.isNaN(newLength)) {
                 return;
               }
-              this.props.deleteBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                this.state.length
-              );
-              this.props.createBasePairs(
-                this.state.fivePrimeRnaMoleculeIndex,
-                this.state.threePrimeRnaMoleculeIndex,
-                this.state.fivePrimeNucleotideIndex,
-                this.state.threePrimeNucleotideIndex,
-                newLength
-              );
-              this.setState({
+              this.props.updatePropsHelper({
                 length : newLength
               });
             }}
@@ -790,16 +837,28 @@ export namespace ContiguousBasePairs {
             style = {{
               width : tableColumnWidth
             }}
-            onClick = {() => {}}
+            onClick = {() => {
+              this.props.updatePropsHelper({
+                updateCache : {
+                  fivePrimeRnaMoleculeIndex : this.props.fivePrimeRnaMoleculeIndex,
+                  fivePrimeNucleotideIndex : this.props.fivePrimeNucleotideIndex,
+                  threePrimeRnaMoleculeIndex : this.props.threePrimeRnaMoleculeIndex,
+                  threePrimeNucleotideIndex : this.props.threePrimeNucleotideIndex,
+                  length : this.props.length
+                }
+              });
+              this.props.createBasePairs(this.props, this.props.updateCache);
+            }}
           >
             Update
           </button>
-          <br/>
           <button
             style = {{
               width : tableColumnWidth
             }}
-            onClick = {() => this.props.removeHelix(this.props.index)}
+            onClick = {() => {
+              this.props.deleteBasePairs(this.props.updateCache);
+            }}
           >
             Delete
           </button>
